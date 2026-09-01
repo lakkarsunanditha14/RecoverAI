@@ -1,0 +1,51 @@
+from sqlalchemy.orm import Session
+
+from app.domain.recovery_outcome import RecoveryOutcome
+from app.models.recovery_outcome import RecoveryOutcomeModel
+
+
+class RecoveryOutcomeRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_by_id(self, outcome_id: str) -> RecoveryOutcome | None:
+        model = (
+            self.db.query(RecoveryOutcomeModel)
+            .filter(RecoveryOutcomeModel.outcome_id == outcome_id)
+            .first()
+        )
+
+        if model is None:
+            return None
+
+        return RecoveryOutcome(
+            outcome_id=model.outcome_id,
+            case_id=model.case_id,
+            action_id=model.action_id,
+            status=model.status,
+            amount_recovered=model.amount_recovered,
+            recorded_at=model.recorded_at,
+        )
+
+    def save(self, outcome: RecoveryOutcome) -> RecoveryOutcome:
+        model = RecoveryOutcomeModel(
+            outcome_id=outcome.outcome_id,
+            case_id=outcome.case_id,
+            action_id=outcome.action_id,
+            status=outcome.status,
+            amount_recovered=outcome.amount_recovered,
+            recorded_at=outcome.recorded_at,
+        )
+
+        self.db.add(model)
+        self.db.commit()
+        self.db.refresh(model)
+
+        return RecoveryOutcome(
+            outcome_id=model.outcome_id,
+            case_id=model.case_id,
+            action_id=model.action_id,
+            status=model.status,
+            amount_recovered=model.amount_recovered,
+            recorded_at=model.recorded_at,
+        )
