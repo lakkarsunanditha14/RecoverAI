@@ -27,6 +27,26 @@ class RecoveryDecisionRepository:
             created_at=model.created_at,
         )
 
+    def get_latest_by_case_id(self, case_id: str) -> RecoveryDecision | None:
+        model = (
+            self.db.query(RecoveryDecisionModel)
+            .filter(RecoveryDecisionModel.case_id == case_id)
+            .order_by(RecoveryDecisionModel.created_at.desc())
+            .first()
+        )
+
+        if model is None:
+            return None
+
+        return RecoveryDecision(
+            decision_id=model.decision_id,
+            case_id=model.case_id,
+            recommended_action=model.recommended_action,
+            confidence=model.confidence,
+            rationale=model.rationale,
+            created_at=model.created_at,
+        )
+
     def save(self, decision: RecoveryDecision) -> RecoveryDecision:
         model = RecoveryDecisionModel(
             decision_id=decision.decision_id,

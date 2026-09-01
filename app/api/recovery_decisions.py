@@ -11,9 +11,9 @@ router = APIRouter()
 
 
 class RecoveryDecisionRequest(BaseModel):
-    recommended_action: str
-    confidence: DecisionConfidence
-    rationale: str
+    recommended_action: str | None = None
+    confidence: DecisionConfidence | None = None
+    rationale: str | None = None
 
 
 class RecoveryDecisionResponse(BaseModel):
@@ -50,7 +50,66 @@ def create_recovery_decision(
             rationale=request.rationale,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+    return RecoveryDecisionResponse(
+        decision_id=decision.decision_id,
+        case_id=decision.case_id,
+        recommended_action=decision.recommended_action,
+        confidence=decision.confidence,
+        rationale=decision.rationale,
+        created_at=decision.created_at.isoformat(),
+    )
+
+
+@router.post(
+    "/recovery-cases/{case_id}/decisions/ai",
+    response_model=RecoveryDecisionResponse,
+)
+def create_ai_recovery_decision(
+    case_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        decision = RecoveryDecisionService(db).create_decision(
+            case_id=case_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
+
+    return RecoveryDecisionResponse(
+        decision_id=decision.decision_id,
+        case_id=decision.case_id,
+        recommended_action=decision.recommended_action,
+        confidence=decision.confidence,
+        rationale=decision.rationale,
+        created_at=decision.created_at.isoformat(),
+    )
+
+
+@router.post(
+    "/recovery-cases/{case_id}/ai-decision",
+    response_model=RecoveryDecisionResponse,
+)
+def create_ai_decision(
+    case_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        decision = RecoveryDecisionService(db).create_decision(
+            case_id=case_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        )
 
     return RecoveryDecisionResponse(
         decision_id=decision.decision_id,

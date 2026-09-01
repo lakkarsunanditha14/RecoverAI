@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.domain.audit_event import AuditEvent
+from app.domain.audit_event import AuditEvent, AuditEventType
 from app.models.audit_event import AuditEventModel
 
 
@@ -18,14 +18,17 @@ class AuditEventRepository:
         if model is None:
             return None
 
-        return AuditEvent(
-            event_id=model.event_id,
-            case_id=model.case_id,
-            event_type=model.event_type,
-            actor=model.actor,
-            reason=model.reason,
-            occurred_at=model.occurred_at,
+        return self._to_domain(model)
+
+    def get_by_case_id(self, case_id: str) -> list[AuditEvent]:
+        models = (
+            self.db.query(AuditEventModel)
+            .filter(AuditEventModel.case_id == case_id)
+            .order_by(AuditEventModel.occurred_at.asc())
+            .all()
         )
+
+        return [self._to_domain(model) for model in models]
 
     def save(self, event: AuditEvent) -> AuditEvent:
         model = AuditEventModel(
@@ -41,10 +44,14 @@ class AuditEventRepository:
         self.db.commit()
         self.db.refresh(model)
 
+        return self._to_domain(model)
+
+    @staticmethod
+    def _to_domain(model: AuditEventModel) -> AuditEvent:
         return AuditEvent(
             event_id=model.event_id,
             case_id=model.case_id,
-            event_type=model.event_type,
+            event_type=AuditEventType(model.event_type),
             actor=model.actor,
             reason=model.reason,
             occurred_at=model.occurred_at,

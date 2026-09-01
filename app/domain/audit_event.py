@@ -11,6 +11,7 @@ class AuditEventType(StrEnum):
     POLICY_CHECKED = "policy_checked"
     ACTION_EXECUTED = "action_executed"
     OUTCOME_RECORDED = "outcome_recorded"
+    RECOVERY_COMPLETED = "recovery_completed"
     CASE_ESCALATED = "case_escalated"
     CASE_STOPPED = "case_stopped"
 
