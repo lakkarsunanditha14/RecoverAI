@@ -8,6 +8,25 @@ class RecoveryCaseRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def list_all(self) -> list[RecoveryCase]:
+        models = (
+            self.db.query(RecoveryCaseModel)
+            .order_by(RecoveryCaseModel.created_at.desc())
+            .all()
+        )
+
+        return [
+            RecoveryCase(
+                case_id=model.case_id,
+                payment_id=model.payment_id,
+                customer_id=model.customer_id,
+                amount_at_risk=model.amount_at_risk,
+                status=RecoveryCaseStatus(model.status),
+                created_at=model.created_at,
+            )
+            for model in models
+        ]
+
     def get_by_id(self, case_id: str) -> RecoveryCase | None:
         model = (
             self.db.query(RecoveryCaseModel)

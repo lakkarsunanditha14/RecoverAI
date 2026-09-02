@@ -19,6 +19,25 @@ def get_db():
         db.close()
 
 
+@router.get("")
+def list_recovery_cases(
+    db: Session = Depends(get_db),
+):
+    cases = RecoveryCaseService(db).list_cases()
+
+    return [
+        {
+            "case_id": case.case_id,
+            "payment_id": case.payment_id,
+            "customer_id": case.customer_id,
+            "amount_at_risk": str(case.amount_at_risk),
+            "status": case.status,
+            "created_at": case.created_at,
+        }
+        for case in cases
+    ]
+
+
 @router.post("/{payment_id}")
 def create_recovery_case(
     payment_id: str,

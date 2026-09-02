@@ -32,6 +32,9 @@ class RecoveryCaseService:
 
         return self.recovery_case_repository.save(case)
 
+    def list_cases(self) -> list[RecoveryCase]:
+        return self.recovery_case_repository.list_all()
+
     def get_case(self, case_id: str) -> RecoveryCase:
         case = self.recovery_case_repository.get_by_id(case_id)
 
