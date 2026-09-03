@@ -1179,9 +1179,7 @@ The implementation emphasizes:
 
 # Author
 
-**Vignesh Reddy**
-
-Fourth-year engineering student and developer of RecoverAI.
+**Lakkarsu Nanditha**
 
 ---
 
