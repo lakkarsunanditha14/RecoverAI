@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.api.recovery_cases import router as recovery_cases_router
 from app.api.recovery_decisions import router as recovery_decisions_router
@@ -15,9 +16,22 @@ app = FastAPI(
 )
 
 
+class Settings(BaseSettings):
+    FRONTEND_ORIGIN: str = "http://localhost:5173"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+    )
+
+
+settings = Settings()
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        settings.FRONTEND_ORIGIN,
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
