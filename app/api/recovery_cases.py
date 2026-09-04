@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.repositories.recovery_outcome_repository import RecoveryOutcomeRepository
 from app.repositories.risk_assessment_repository import RiskAssessmentRepository
 from app.services.recovery_case_service import RecoveryCaseService
 
@@ -26,6 +27,7 @@ def list_recovery_cases(
 ):
     cases = RecoveryCaseService(db).list_cases()
     risk_scores = RiskAssessmentRepository(db).get_latest_scores()
+    recovered = RecoveryOutcomeRepository(db).get_recovered_totals()
 
     return [
         {
@@ -38,6 +40,9 @@ def list_recovery_cases(
             # None until the case has been assessed, so the dashboard can
             # say so rather than inventing a risk band from the status.
             "risk_score": risk_scores.get(case.case_id),
+            # What actually came back, which for a partial
+            # recovery is less than the amount at risk.
+            "amount_recovered": str(recovered.get(case.case_id, 0)),
         }
         for case in cases
     ]

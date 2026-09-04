@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.domain.recovery_outcome import RecoveryOutcome
@@ -29,6 +32,22 @@ class RecoveryOutcomeRepository:
         )
 
         return [self._to_domain(model) for model in models]
+
+    def get_recovered_totals(self) -> dict[str, Decimal]:
+        # Summed per case in one query. A case can hold more than one
+        # outcome, and a partial recovery brings back less than the amount
+        # at risk, so the recovered figure has to come from the outcomes
+        # rather than from the case's own amount.
+        totals = (
+            self.db.query(
+                RecoveryOutcomeModel.case_id,
+                func.sum(RecoveryOutcomeModel.amount_recovered),
+            )
+            .group_by(RecoveryOutcomeModel.case_id)
+            .all()
+        )
+
+        return {case_id: total for case_id, total in totals}
 
     def save(self, outcome: RecoveryOutcome) -> RecoveryOutcome:
         model = RecoveryOutcomeModel(
