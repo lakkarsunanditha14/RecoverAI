@@ -5,6 +5,7 @@ from enum import StrEnum
 
 class RecoveryActionType(StrEnum):
     RETRY_PAYMENT = "retry_payment"
+    MANUAL_REVIEW = "manual_review"
     SEND_REMINDER = "send_reminder"
     UPDATE_PAYMENT_METHOD = "update_payment_method"
     OFFER_ALTERNATIVE_METHOD = "offer_alternative_method"
