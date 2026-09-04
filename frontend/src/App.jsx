@@ -21,6 +21,7 @@ import {
   checkHealth,
   createAIDecision,
   createAIRecoveryAction,
+  createRecoveryCase,
   createRiskAssessment,
   getRecoveryCase,
   getRecoveryCases,
@@ -56,41 +57,6 @@ const stats = [
     change: "-14.6%",
     icon: CreditCard,
     tone: "warning",
-  },
-];
-
-const cases = [
-  {
-    id: "RCV-10482",
-    customer: "Acme Technologies",
-    amount: "₹48,500",
-    risk: "High",
-    decision: "Retry",
-    status: "Action Required",
-  },
-  {
-    id: "RCV-10481",
-    customer: "Nova Retail",
-    amount: "₹24,800",
-    risk: "Medium",
-    decision: "Reminder",
-    status: "Scheduled",
-  },
-  {
-    id: "RCV-10480",
-    customer: "Orbit Labs",
-    amount: "₹72,000",
-    risk: "Low",
-    decision: "Retry",
-    status: "Recovered",
-  },
-  {
-    id: "RCV-10479",
-    customer: "Vertex Systems",
-    amount: "₹31,200",
-    risk: "High",
-    decision: "Escalate",
-    status: "Pending Review",
   },
 ];
 
@@ -151,6 +117,10 @@ function App() {
   const [auditError, setAuditError] = useState("");
 
   const [backendOnline, setBackendOnline] = useState(false);
+  const [newCaseOpen, setNewCaseOpen] = useState(false);
+  const [paymentId, setPaymentId] = useState("");
+  const [newCaseLoading, setNewCaseLoading] = useState(false);
+  const [newCaseError, setNewCaseError] = useState("");
 
   useEffect(() => {
     getRecoveryCases()
@@ -370,6 +340,29 @@ function App() {
     }
   };
 
+  const handleCreateRecoveryCase = async (event) => {
+    event.preventDefault();
+    if (!paymentId.trim()) {
+      setNewCaseError("Enter a payment ID to create a recovery case.");
+      return;
+    }
+
+    setNewCaseLoading(true);
+    setNewCaseError("");
+
+    try {
+      const createdCase = await createRecoveryCase(paymentId.trim());
+      setRecoveryCases((currentCases) => [createdCase, ...currentCases]);
+      setRecoveryCase(createdCase);
+      setPaymentId("");
+      setNewCaseOpen(false);
+    } catch (error) {
+      setNewCaseError(error.message);
+    } finally {
+      setNewCaseLoading(false);
+    }
+  };
+
   const riskLabel = riskAssessment
     ? riskAssessment.risk_score >= 60
       ? "High"
@@ -389,6 +382,51 @@ function App() {
 
   return (
     <div className="app-shell">
+      {newCaseOpen && (
+        <div className="modal-backdrop">
+          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-case-title">
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">RECOVERY PIPELINE</p>
+                <h3 id="new-case-title">New Recovery Case</h3>
+              </div>
+              <button
+                className="icon-button"
+                onClick={() => setNewCaseOpen(false)}
+                aria-label="Close new recovery case form"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRecoveryCase}>
+              <label className="form-label" htmlFor="payment-id">Payment ID</label>
+              <input
+                id="payment-id"
+                className="form-input"
+                value={paymentId}
+                onChange={(event) => setPaymentId(event.target.value)}
+                placeholder="Enter an existing payment ID"
+                autoFocus
+              />
+              {newCaseError && <div className="error-message">{newCaseError}</div>}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setNewCaseOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button className="primary-button" type="submit" disabled={newCaseLoading}>
+                  {newCaseLoading ? "Creating..." : "Create Case"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
       {sidebarOpen && (
         <button
           className="mobile-overlay"
@@ -546,7 +584,11 @@ function App() {
                     ? "AI Decisions"
                     : activeView === "actions"
                       ? "Recovery Actions"
-                      : "Dashboard"}
+                      : activeView === "outcomes"
+                        ? "Recovery Outcomes"
+                        : activeView === "audit"
+                          ? "Audit Events"
+                          : "Dashboard"}
             </strong>
           </div>
 
@@ -572,7 +614,13 @@ function App() {
                   </p>
                 </div>
 
-                <button className="primary-button">
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    setNewCaseError("");
+                    setNewCaseOpen(true);
+                  }}
+                >
                   New Recovery Case
                 </button>
               </section>
@@ -642,7 +690,22 @@ function App() {
 
                     <tbody>
                       {displayedCases.map((item) => (
-                        <tr key={item.id}>
+                        <tr
+                          key={item.id}
+                          className="case-row"
+                          onClick={() => {
+                            const selectedCase = recoveryCases.find(
+                              (currentCase) => currentCase.case_id === item.id
+                            );
+                            if (selectedCase) {
+                              setRecoveryCase(selectedCase);
+                              setRiskAssessment(null);
+                              setAiDecision(null);
+                              setRecoveryAction(null);
+                              setRecoveryOutcome(null);
+                            }
+                          }}
+                        >
                           <td>{item.id}</td>
                           <td>{item.customer}</td>
                           <td>{item.amount}</td>
@@ -1187,7 +1250,10 @@ function App() {
                   </p>
                 </div>
 
-                <button className="primary-button">
+                <button
+                  className="primary-button"
+                  onClick={() => setActiveView("ai-decisions")}
+                >
                   AI Recovery Overview
                 </button>
               </section>

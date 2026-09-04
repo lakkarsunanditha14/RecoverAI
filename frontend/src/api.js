@@ -32,6 +32,12 @@ export async function getRecoveryCase(caseId) {
   return apiRequest(`/recovery-cases/${caseId}`);
 }
 
+export async function createRecoveryCase(paymentId) {
+  return apiRequest(`/recovery-cases/${paymentId}`, {
+    method: "POST",
+  });
+}
+
 export async function createRiskAssessment(caseId) {
   return apiRequest(`/recovery-cases/${caseId}/risk-assessments`, {
     method: "POST",

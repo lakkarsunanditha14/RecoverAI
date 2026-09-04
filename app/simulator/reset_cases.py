@@ -16,6 +16,7 @@ dashboard back to one case per payment.
 from sqlalchemy import text
 
 from app.core.database import SessionLocal
+from app.services.recovery_case_service import RecoveryCaseService
 
 
 # Children first: the foreign keys to recovery_cases are NO ACTION, so
@@ -30,10 +31,14 @@ CHILD_TABLES = [
 ]
 
 
-def reset() -> tuple[int, int]:
+def reset() -> tuple[int, int, int]:
     db = SessionLocal()
 
     try:
+        # Prefer a case still in "created" status so the workflow can be
+        # demonstrated from the start, but fall back to the newest case of
+        # any status: dropping a payment off the dashboard entirely is
+        # worse than keeping an already-completed case.
         keep = [
             row[0]
             for row in db.execute(
@@ -41,18 +46,14 @@ def reset() -> tuple[int, int]:
                     """
                     select distinct on (payment_id) case_id
                     from recovery_cases
-                    where status = 'created'
-                    order by payment_id, created_at desc
+                    order by
+                        payment_id,
+                        (status = 'created') desc,
+                        created_at desc
                     """
                 )
             )
         ]
-
-        if not keep:
-            raise RuntimeError(
-                "No case in 'created' status to keep. Refusing to delete "
-                "every recovery case: the frontend cannot create new ones."
-            )
 
         deleted = 0
 
@@ -62,6 +63,27 @@ def reset() -> tuple[int, int]:
                 {"keep": keep},
             ).rowcount
 
+        # A payment whose cases were all deleted would vanish from the
+        # dashboard, and the workflow can only start from a case.
+        missing = [
+            row[0]
+            for row in db.execute(
+                text(
+                    """
+                    select payment_id from payments
+                    where payment_id not in (
+                        select payment_id from recovery_cases
+                    )
+                    """
+                )
+            )
+        ]
+
+        service = RecoveryCaseService(db)
+
+        for payment_id in missing:
+            service.create_case(payment_id)
+
         db.commit()
     except Exception:
         db.rollback()
@@ -69,9 +91,12 @@ def reset() -> tuple[int, int]:
     finally:
         db.close()
 
-    return len(keep), deleted
+    return len(keep), deleted, len(missing)
 
 
 if __name__ == "__main__":
-    kept, deleted = reset()
-    print(f"Kept {kept} recovery cases, deleted {deleted} rows.")
+    kept, deleted, restored = reset()
+    print(
+        f"Kept {kept} recovery cases, deleted {deleted} rows, "
+        f"restored {restored} missing."
+    )
