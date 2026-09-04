@@ -12,7 +12,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   approveRecoveryAction,
   recordRecoveryOutcome,
@@ -29,36 +29,54 @@ import {
 } from "./api";
 import "./App.css";
 
-const stats = [
-  {
-    label: "Revenue at Risk",
-    value: "₹8.42L",
-    change: "+12.4%",
-    icon: AlertTriangle,
-    tone: "danger",
-  },
-  {
-    label: "Recoverable Amount",
-    value: "₹6.18L",
-    change: "73.3%",
-    icon: Target,
-    tone: "success",
-  },
-  {
-    label: "Recovery Rate",
-    value: "68.7%",
-    change: "+8.2%",
-    icon: RefreshCw,
-    tone: "primary",
-  },
-  {
-    label: "Failed Payments",
-    value: "1,284",
-    change: "-14.6%",
-    icon: CreditCard,
-    tone: "warning",
-  },
-];
+const rupees = (value) =>
+  `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+
+// Derived from the cases the dashboard already loaded. There is no
+// historical snapshot to compare against, so each tile describes the
+// current figure rather than a change over time.
+function buildStats(cases) {
+  const total = (list) =>
+    list.reduce((sum, item) => sum + Number(item.amount_at_risk), 0);
+
+  const recovered = cases.filter((item) => item.status === "recovered");
+  const open = cases.filter((item) => item.status !== "recovered");
+
+  const rate = cases.length
+    ? Math.round((recovered.length / cases.length) * 100)
+    : 0;
+
+  return [
+    {
+      label: "Revenue at Risk",
+      value: rupees(total(open)),
+      detail: `${open.length} open ${open.length === 1 ? "case" : "cases"}`,
+      icon: AlertTriangle,
+      tone: "danger",
+    },
+    {
+      label: "Revenue Recovered",
+      value: rupees(total(recovered)),
+      detail: `${recovered.length} of ${cases.length} cases`,
+      icon: Target,
+      tone: "success",
+    },
+    {
+      label: "Recovery Rate",
+      value: `${rate}%`,
+      detail: "by case count",
+      icon: RefreshCw,
+      tone: "primary",
+    },
+    {
+      label: "Recovery Cases",
+      value: String(cases.length),
+      detail: "tracked in total",
+      icon: CreditCard,
+      tone: "warning",
+    },
+  ];
+}
 
 const activities = [
   {
@@ -92,6 +110,7 @@ function App() {
   const [activeView, setActiveView] = useState("dashboard");
 
   const [recoveryCases, setRecoveryCases] = useState([]);
+  const stats = useMemo(() => buildStats(recoveryCases), [recoveryCases]);
   const [recoveryCase, setRecoveryCase] = useState(null);
   const [caseLoading, setCaseLoading] = useState(true);
   const [caseError, setCaseError] = useState("");
@@ -1271,7 +1290,7 @@ function App() {
                       <div className="stat-content">
                         <span>{stat.label}</span>
                         <strong>{stat.value}</strong>
-                        <small>{stat.change} vs last period</small>
+                        <small>{stat.detail}</small>
                       </div>
                     </article>
                   );
