@@ -54,11 +54,17 @@ def reset() -> tuple[int, int, int]:
 
         deleted = 0
 
-        for table in CHILD_TABLES + ["recovery_cases"]:
-            deleted += db.execute(
-                text(f"delete from {table} where case_id != all(:keep)"),
-                {"keep": keep},
-            ).rowcount
+        # Every child row goes, including those belonging to a case being
+        # kept: a case left with an assessment and a decision but still in
+        # "created" status is not a clean starting point, and these would
+        # otherwise pile up across runs.
+        for table in CHILD_TABLES:
+            deleted += db.execute(text(f"delete from {table}")).rowcount
+
+        deleted += db.execute(
+            text("delete from recovery_cases where case_id != all(:keep)"),
+            {"keep": keep},
+        ).rowcount
 
         # A payment whose cases were all deleted would vanish from the
         # dashboard, and the workflow can only start from a case.
