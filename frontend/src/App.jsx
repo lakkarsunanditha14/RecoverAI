@@ -26,6 +26,7 @@ import {
   getRecoveryCase,
   getRecoveryCases,
   getAuditEvents,
+  getRecentAuditEvents,
 } from "./api";
 import "./App.css";
 
@@ -78,32 +79,38 @@ function buildStats(cases) {
   ];
 }
 
-const activities = [
-  {
-    title: "AI recovery action executed",
-    description: "Smart retry initiated for RCV-10482",
-    time: "2 min ago",
-    icon: Zap,
-  },
-  {
-    title: "Payment recovered",
-    description: "₹72,000 successfully recovered",
-    time: "18 min ago",
-    icon: CheckCircle2,
-  },
-  {
-    title: "Risk assessment completed",
-    description: "RCV-10481 classified as medium risk",
-    time: "31 min ago",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Recovery reminder scheduled",
-    description: "Customer reminder scheduled for tomorrow",
-    time: "48 min ago",
-    icon: Clock3,
-  },
-];
+const EVENT_LABELS = {
+  payment_received: { title: "Payment received", icon: CheckCircle2 },
+  payment_failed: { title: "Payment failed", icon: AlertTriangle },
+  risk_assessed: { title: "Risk assessment completed", icon: ShieldCheck },
+  action_proposed: { title: "Recovery action proposed", icon: Zap },
+  policy_checked: { title: "Policy checked", icon: ShieldCheck },
+  action_executed: { title: "Recovery action executed", icon: Zap },
+  outcome_recorded: { title: "Outcome recorded", icon: Target },
+  recovery_completed: { title: "Recovery completed", icon: CheckCircle2 },
+  case_escalated: { title: "Case escalated", icon: AlertTriangle },
+  case_stopped: { title: "Case stopped", icon: X },
+};
+
+function relativeTime(isoString) {
+  // The backend stores naive UTC timestamps, so mark them as UTC before
+  // comparing: parsing them as local time puts every event in the future.
+  const then = new Date(
+    isoString.endsWith("Z") ? isoString : `${isoString}Z`
+  );
+  const seconds = Math.round((Date.now() - then.getTime()) / 1000);
+
+  if (seconds < 60) return "just now";
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+
+  const days = Math.round(hours / 24);
+  return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -135,6 +142,8 @@ function App() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState("");
 
+  const [recentEvents, setRecentEvents] = useState([]);
+
   const [backendOnline, setBackendOnline] = useState(false);
   const [newCaseOpen, setNewCaseOpen] = useState(false);
   const [paymentId, setPaymentId] = useState("");
@@ -156,6 +165,14 @@ function App() {
       .then(() => setBackendOnline(true))
       .catch(() => setBackendOnline(false));
   }, []);
+
+  // Refetched whenever an action lands, so the feed reflects the workflow
+  // being driven from this page rather than only the state at page load.
+  useEffect(() => {
+    getRecentAuditEvents()
+      .then(setRecentEvents)
+      .catch(() => setRecentEvents([]));
+  }, [recoveryAction, recoveryOutcome, riskAssessment]);
 
   const displayedCases = recoveryCases.map((recoveryCase) => ({
     id: recoveryCase.case_id,
@@ -1361,22 +1378,30 @@ function App() {
                   </div>
 
                   <div className="activity-list">
-                    {activities.map((item) => {
-                      const Icon = item.icon;
+                    {recentEvents.length === 0 && (
+                      <p className="activity-empty">
+                        No recovery activity yet. Run a recovery action to
+                        see events appear here.
+                      </p>
+                    )}
+
+                    {recentEvents.map((event) => {
+                      const label = EVENT_LABELS[event.event_type] ?? {
+                        title: event.event_type,
+                        icon: Zap,
+                      };
+                      const Icon = label.icon;
 
                       return (
-                        <div
-                          className="activity-item"
-                          key={item.title}
-                        >
+                        <div className="activity-item" key={event.event_id}>
                           <div className="activity-icon">
                             <Icon size={17} />
                           </div>
 
                           <div className="activity-copy">
-                            <strong>{item.title}</strong>
-                            <span>{item.description}</span>
-                            <small>{item.time}</small>
+                            <strong>{label.title}</strong>
+                            <span>{event.reason}</span>
+                            <small>{relativeTime(event.occurred_at)}</small>
                           </div>
                         </div>
                       );

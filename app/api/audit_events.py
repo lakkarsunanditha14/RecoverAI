@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -66,6 +66,19 @@ def record_audit_event(
         )
 
     return build_response(event)
+
+
+@router.get(
+    "/audit-events",
+    response_model=list[AuditEventResponse],
+)
+def get_recent_audit_events(
+    limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    events = AuditEventService(db).get_recent_events(limit)
+
+    return [build_response(event) for event in events]
 
 
 @router.get(

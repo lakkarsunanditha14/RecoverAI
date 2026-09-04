@@ -30,6 +30,16 @@ class AuditEventRepository:
 
         return [self._to_domain(model) for model in models]
 
+    def list_recent(self, limit: int) -> list[AuditEvent]:
+        models = (
+            self.db.query(AuditEventModel)
+            .order_by(AuditEventModel.occurred_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return [self._to_domain(model) for model in models]
+
     def save(self, event: AuditEvent) -> AuditEvent:
         model = AuditEventModel(
             event_id=event.event_id,

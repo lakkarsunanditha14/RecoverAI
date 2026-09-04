@@ -44,6 +44,9 @@ class AuditEventService:
 
         return self.audit_event_repository.save(event)
 
+    def get_recent_events(self, limit: int = 10) -> list[AuditEvent]:
+        return self.audit_event_repository.list_recent(limit)
+
     def get_case_events(self, case_id: str) -> list[AuditEvent]:
         case = self.recovery_case_repository.get_by_id(case_id)
 
