@@ -664,6 +664,7 @@ function App() {
       <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-header">
           <div className="brand-mark">
+            <Target size={20} strokeWidth={2.25} aria-hidden="true" />
           </div>
 
           <div className="brand-copy">
