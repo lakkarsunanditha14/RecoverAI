@@ -8,6 +8,7 @@ import {
   Menu,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   Target,
   X,
   Zap,
@@ -663,10 +664,6 @@ function App() {
 
       <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-header">
-          <div className="brand-mark">
-            <Target size={20} strokeWidth={2.25} aria-hidden="true" />
-          </div>
-
           <div className="brand-copy">
             <strong>RecoverAI</strong>
             <span>Revenue Intelligence</span>
@@ -730,6 +727,7 @@ function App() {
               handleAIDecision();
             }}
           >
+            <Sparkles size={19} />
             AI Decisions
           </button>
 
