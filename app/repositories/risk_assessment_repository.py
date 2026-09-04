@@ -49,6 +49,21 @@ class RiskAssessmentRepository:
             assessed_at=model.assessed_at,
         )
 
+    def get_latest_scores(self) -> dict[str, float]:
+        # One row per case rather than a query per case, so listing cases
+        # stays a fixed number of round trips as the case count grows.
+        latest = (
+            self.db.query(RiskAssessmentModel)
+            .distinct(RiskAssessmentModel.case_id)
+            .order_by(
+                RiskAssessmentModel.case_id,
+                RiskAssessmentModel.assessed_at.desc(),
+            )
+            .all()
+        )
+
+        return {model.case_id: model.risk_score for model in latest}
+
     def save(self, assessment: RiskAssessment) -> RiskAssessment:
         model = RiskAssessmentModel(
             assessment_id=assessment.assessment_id,

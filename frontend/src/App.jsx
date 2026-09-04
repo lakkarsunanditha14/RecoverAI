@@ -80,6 +80,34 @@ function buildStats(cases) {
   ];
 }
 
+const CASE_STATUS_LABELS = {
+  created: { text: "Action Required", tone: "warning" },
+  investigating: { text: "Investigating", tone: "neutral" },
+  decision_ready: { text: "Decision Ready", tone: "primary" },
+  executing: { text: "Executing", tone: "primary" },
+  verifying: { text: "Verifying", tone: "primary" },
+  recovered: { text: "Recovered", tone: "success" },
+  partially_recovered: { text: "Partially Recovered", tone: "success" },
+  failed: { text: "Failed", tone: "danger" },
+  stopped: { text: "Stopped", tone: "neutral" },
+  escalated: { text: "Escalated", tone: "danger" },
+};
+
+// The risk band comes from the assessed score. It used to be derived from
+// the case status, which reported a recovered case as "Low" risk and had
+// nothing to do with the assessment.
+function riskBand(score) {
+  if (score === null || score === undefined) {
+    return { text: "Not assessed", tone: "neutral" };
+  }
+
+  if (score >= 70) return { text: `High · ${score.toFixed(0)}`, tone: "danger" };
+  if (score >= 40)
+    return { text: `Medium · ${score.toFixed(0)}`, tone: "warning" };
+
+  return { text: `Low · ${score.toFixed(0)}`, tone: "success" };
+}
+
 const EVENT_LABELS = {
   payment_received: { title: "Payment received", icon: CheckCircle2 },
   payment_failed: { title: "Payment failed", icon: AlertTriangle },
@@ -192,46 +220,50 @@ function App() {
     };
   }, [selectedCaseId]);
 
-  // Refetched whenever an action lands, so the feed reflects the workflow
+  // Refetched whenever a step lands, so the feed reflects the workflow
   // being driven from this page rather than only the state at page load.
+  // Keyed on the identifiers rather than the objects: re-fetching a case
+  // hands back an equal-but-new object, which would refetch for nothing.
+  const auditKey = [
+    riskAssessment?.assessment_id,
+    recoveryAction?.action_id,
+    recoveryAction?.status,
+    recoveryOutcome?.outcome_id,
+  ].join("|");
+
   useEffect(() => {
     getRecentAuditEvents()
       .then(setRecentEvents)
       .catch(() => setRecentEvents([]));
-  }, [recoveryAction, recoveryOutcome, riskAssessment]);
+  }, [auditKey]);
 
   const amountValue =
     amountRecovered === ""
       ? (recoveryCase?.amount_at_risk ?? "")
       : amountRecovered;
 
-  const displayedCases = recoveryCases.map((recoveryCase) => ({
-    id: recoveryCase.case_id,
-    customer: recoveryCase.customer_id,
-    amount: `₹${Number(
-      recoveryCase.amount_at_risk
-    ).toLocaleString("en-IN")}`,
-    risk:
-      recoveryCase.status === "escalated"
-        ? "High"
-        : recoveryCase.status === "failed"
-          ? "Medium"
-          : recoveryCase.status === "recovered"
-            ? "Low"
-            : "Pending",
-    decision:
-      recoveryCase.status === "recovered"
-        ? "Recovered"
-        : recoveryCase.status === "escalated"
-          ? "Escalate"
-          : "Review",
-    status:
-      recoveryCase.status === "recovered"
-        ? "Recovered"
-        : recoveryCase.status === "escalated"
-          ? "Pending Review"
-          : "Action Required",
-  }))
+  const displayedCases = useMemo(
+    () =>
+      recoveryCases.map((item) => {
+        const label = CASE_STATUS_LABELS[item.status] ?? {
+          text: item.status,
+          tone: "neutral",
+        };
+
+        return {
+          id: item.case_id,
+          // The full identifier is a uuid; the tail is enough to tell
+          // rows apart and the title attribute keeps the whole value.
+          shortId: item.case_id.replace(/^case_/, "").slice(0, 8),
+          customer: item.customer_id,
+          amount: rupees(Number(item.amount_at_risk)),
+          risk: riskBand(item.risk_score),
+          status: label.text,
+          tone: label.tone,
+        };
+      }),
+    [recoveryCases]
+  );
 
   const handleRiskAssessment = async () => {
     if (!recoveryCase) {
@@ -748,8 +780,8 @@ function App() {
                     <span>High Risk</span>
                     <strong>
                       {
-                        displayedCases.filter(
-                          (item) => item.risk === "High"
+                        displayedCases.filter((item) =>
+                          item.risk.text.startsWith("High")
                         ).length
                       }
                     </strong>
@@ -786,7 +818,6 @@ function App() {
                         <th>Customer</th>
                         <th>Amount</th>
                         <th>Risk</th>
-                        <th>Decision</th>
                         <th>Status</th>
                       </tr>
                     </thead>
@@ -810,19 +841,22 @@ function App() {
                             }
                           }}
                         >
-                          <td>{item.id}</td>
+                          <td>
+                            <code className="case-id" title={item.id}>
+                              {item.shortId}
+                            </code>
+                          </td>
                           <td>{item.customer}</td>
-                          <td>{item.amount}</td>
+                          <td className="numeric">{item.amount}</td>
                           <td>
                             <span
-                              className={`risk-badge ${item.risk.toLowerCase()}`}
+                              className={`risk-badge ${item.risk.tone}`}
                             >
-                              {item.risk}
+                              {item.risk.text}
                             </span>
                           </td>
-                          <td>{item.decision}</td>
                           <td>
-                            <span className="case-status">
+                            <span className={`case-status ${item.tone}`}>
                               {item.status}
                             </span>
                           </td>
@@ -1428,18 +1462,22 @@ function App() {
                       <tbody>
                         {displayedCases.slice(0, 5).map((item) => (
                           <tr key={item.id}>
-                            <td>{item.id}</td>
+                            <td>
+                              <code className="case-id" title={item.id}>
+                                {item.shortId}
+                              </code>
+                            </td>
                             <td>{item.customer}</td>
-                            <td>{item.amount}</td>
+                            <td className="numeric">{item.amount}</td>
                             <td>
                               <span
-                                className={`risk-badge ${item.risk.toLowerCase()}`}
+                                className={`risk-badge ${item.risk.tone}`}
                               >
-                                {item.risk}
+                                {item.risk.text}
                               </span>
                             </td>
                             <td>
-                              <span className="case-status">
+                              <span className={`case-status ${item.tone}`}>
                                 {item.status}
                               </span>
                             </td>

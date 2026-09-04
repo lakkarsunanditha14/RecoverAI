@@ -1792,3 +1792,55 @@ table td {
   color: inherit;
   font-size: 0.9rem;
 }
+
+/* Badge tones. Risk and status both use these, so a status and a risk
+   band of the same severity read the same way across the dashboard. */
+.risk-badge.danger,
+.case-status.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.risk-badge.warning,
+.case-status.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.risk-badge.success,
+.case-status.success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.risk-badge.primary,
+.case-status.primary {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.risk-badge.neutral,
+.case-status.neutral {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.case-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+/* Amounts line up on the decimal when right aligned and tabular. */
+td.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+th:nth-child(3) {
+  text-align: right;
+}
