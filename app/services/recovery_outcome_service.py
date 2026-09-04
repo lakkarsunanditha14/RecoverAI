@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from app.domain.audit_event import AuditEventType
 from app.domain.recovery_outcome import (
     RecoveryOutcome,
     RecoveryOutcomeStatus,
@@ -12,6 +13,7 @@ from app.domain.recovery_case import RecoveryCaseStatus
 from app.repositories.recovery_action_repository import RecoveryActionRepository
 from app.repositories.recovery_case_repository import RecoveryCaseRepository
 from app.repositories.recovery_outcome_repository import RecoveryOutcomeRepository
+from app.services.audit_event_service import AuditEventService
 
 
 class RecoveryOutcomeService:
@@ -20,6 +22,7 @@ class RecoveryOutcomeService:
         self.recovery_case_repository = RecoveryCaseRepository(db)
         self.recovery_action_repository = RecoveryActionRepository(db)
         self.recovery_outcome_repository = RecoveryOutcomeRepository(db)
+        self.audit_event_service = AuditEventService(db)
 
     def record_outcome(
         self,
@@ -54,15 +57,45 @@ class RecoveryOutcomeService:
 
         saved_outcome = self.recovery_outcome_repository.save(outcome)
 
+        self.audit_event_service.record_event(
+            case_id=case.case_id,
+            event_type=AuditEventType.OUTCOME_RECORDED,
+            actor="recovery_outcome_service",
+            reason=(
+                f"Outcome {status} recorded for action {action.action_id} "
+                f"with {amount_recovered:.2f} recovered."
+            ),
+        )
+
         if status == RecoveryOutcomeStatus.RECOVERED:
             self.recovery_case_repository.update_status(
                 case_id=case.case_id,
                 status=RecoveryCaseStatus.RECOVERED,
             )
+
+            self.audit_event_service.record_event(
+                case_id=case.case_id,
+                event_type=AuditEventType.RECOVERY_COMPLETED,
+                actor="recovery_outcome_service",
+                reason=(
+                    f"Recovery completed with {amount_recovered:.2f} "
+                    f"of {case.amount_at_risk:.2f} recovered."
+                ),
+            )
         elif status == RecoveryOutcomeStatus.NOT_RECOVERED:
             self.recovery_case_repository.update_status(
                 case_id=case.case_id,
                 status=RecoveryCaseStatus.FAILED,
+            )
+
+            self.audit_event_service.record_event(
+                case_id=case.case_id,
+                event_type=AuditEventType.CASE_STOPPED,
+                actor="recovery_outcome_service",
+                reason=(
+                    f"Recovery did not succeed for amount at risk "
+                    f"{case.amount_at_risk:.2f}."
+                ),
             )
 
         return saved_outcome

@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from app.domain.audit_event import AuditEventType
 from app.domain.payment_attempt import AttemptStatus
 from app.domain.payment import PaymentStatus
 from app.domain.risk_assessment import RiskAssessment
@@ -10,6 +11,7 @@ from app.repositories.payment_attempt_repository import PaymentAttemptRepository
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.recovery_case_repository import RecoveryCaseRepository
 from app.repositories.risk_assessment_repository import RiskAssessmentRepository
+from app.services.audit_event_service import AuditEventService
 
 
 class RiskAssessmentService:
@@ -19,6 +21,7 @@ class RiskAssessmentService:
         self.recovery_case_repository = RecoveryCaseRepository(db)
         self.payment_attempt_repository = PaymentAttemptRepository(db)
         self.risk_assessment_repository = RiskAssessmentRepository(db)
+        self.audit_event_service = AuditEventService(db)
 
     def assess(self, case_id: str) -> RiskAssessment:
         case = self.recovery_case_repository.get_by_id(case_id)
@@ -88,4 +91,16 @@ class RiskAssessmentService:
             assessed_at=datetime.now(timezone.utc),
         )
 
-        return self.risk_assessment_repository.save(assessment)
+        saved_assessment = self.risk_assessment_repository.save(assessment)
+
+        self.audit_event_service.record_event(
+            case_id=case.case_id,
+            event_type=AuditEventType.RISK_ASSESSED,
+            actor="risk_assessment_service",
+            reason=(
+                f"Risk {risk_score:.0f}, recoverability "
+                f"{recoverability_score:.0f}: {saved_assessment.reason}"
+            ),
+        )
+
+        return saved_assessment

@@ -31,6 +31,7 @@ def test_service_uses_agent_recommendation():
     db = Mock()
 
     service = RecoveryDecisionService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.risk_assessment_repository = Mock()
@@ -77,6 +78,7 @@ def test_service_falls_back_when_no_assessment_exists():
     db = Mock()
 
     service = RecoveryDecisionService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.risk_assessment_repository = Mock()

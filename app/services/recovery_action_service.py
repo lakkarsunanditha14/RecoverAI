@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.agents.recovery_action_agent import RecoveryActionAgent
+from app.domain.audit_event import AuditEventType
 from app.domain.recovery_action import (
     RecoveryAction,
     RecoveryActionStatus,
@@ -12,6 +13,7 @@ from app.domain.recovery_action import (
 from app.repositories.recovery_action_repository import RecoveryActionRepository
 from app.repositories.recovery_case_repository import RecoveryCaseRepository
 from app.repositories.recovery_decision_repository import RecoveryDecisionRepository
+from app.services.audit_event_service import AuditEventService
 from app.services.recovery_decision_service import RecoveryDecisionService
 
 
@@ -22,6 +24,7 @@ class RecoveryActionService:
         self.recovery_action_repository = RecoveryActionRepository(db)
         self.recovery_decision_repository = RecoveryDecisionRepository(db)
         self.recovery_decision_service = RecoveryDecisionService(db)
+        self.audit_event_service = AuditEventService(db)
         self.agent = RecoveryActionAgent()
 
     def propose_action(
@@ -59,4 +62,16 @@ class RecoveryActionService:
             proposed_at=datetime.now(timezone.utc),
         )
 
-        return self.recovery_action_repository.save(action)
+        saved_action = self.recovery_action_repository.save(action)
+
+        self.audit_event_service.record_event(
+            case_id=case.case_id,
+            event_type=AuditEventType.ACTION_PROPOSED,
+            actor="recovery_action_service",
+            reason=(
+                f"Proposed {saved_action.action_type} for amount at risk "
+                f"{case.amount_at_risk:.2f}."
+            ),
+        )
+
+        return saved_action
