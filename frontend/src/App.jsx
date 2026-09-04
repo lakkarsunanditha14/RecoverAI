@@ -137,6 +137,7 @@ function App() {
   const [recoveryOutcome, setRecoveryOutcome] = useState(null);
   const [outcomeLoading, setOutcomeLoading] = useState(false);
   const [outcomeError, setOutcomeError] = useState("");
+  const [amountRecovered, setAmountRecovered] = useState("");
 
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -173,6 +174,11 @@ function App() {
       .then(setRecentEvents)
       .catch(() => setRecentEvents([]));
   }, [recoveryAction, recoveryOutcome, riskAssessment]);
+
+  const amountValue =
+    amountRecovered === ""
+      ? (recoveryCase?.amount_at_risk ?? "")
+      : amountRecovered;
 
   const displayedCases = recoveryCases.map((recoveryCase) => ({
     id: recoveryCase.case_id,
@@ -328,6 +334,32 @@ function App() {
       return;
     }
 
+    // Nothing is recovered when the attempt failed, and a partial
+    // recovery is whatever the operator entered. Sending the full amount
+    // at risk for every outcome recorded revenue that never came back.
+    const amount =
+      status === "not_recovered"
+        ? "0.00"
+        : status === "recovered"
+          ? recoveryCase.amount_at_risk
+          : amountValue;
+
+    if (status === "partially_recovered") {
+      const entered = Number(amount);
+
+      if (!Number.isFinite(entered) || entered <= 0) {
+        setOutcomeError("Enter the amount recovered.");
+        return;
+      }
+
+      if (entered >= Number(recoveryCase.amount_at_risk)) {
+        setOutcomeError(
+          "A partial recovery must be less than the amount at risk."
+        );
+        return;
+      }
+    }
+
     setOutcomeLoading(true);
     setOutcomeError("");
 
@@ -336,14 +368,24 @@ function App() {
         recoveryCase.case_id,
         recoveryAction.action_id,
         status,
-        recoveryCase.amount_at_risk
+        amount
       );
+
+      // The case status is not the outcome status: a failed recovery
+      // leaves the case "failed", not "not_recovered".
+      const caseStatus =
+        outcome.status === "not_recovered" ? "failed" : outcome.status;
 
       setRecoveryOutcome(outcome);
       setRecoveryCase((currentCase) =>
-        currentCase
-          ? { ...currentCase, status: outcome.status === "recovered" ? "recovered" : currentCase.status }
-          : currentCase
+        currentCase ? { ...currentCase, status: caseStatus } : currentCase
+      );
+      setRecoveryCases((cases) =>
+        cases.map((item) =>
+          item.case_id === recoveryCase.case_id
+            ? { ...item, status: caseStatus }
+            : item
+        )
       );
     } catch (error) {
       setOutcomeError(error.message);
@@ -735,6 +777,7 @@ function App() {
                             );
                             if (selectedCase) {
                               setRecoveryCase(selectedCase);
+                              setAmountRecovered("");
                               setRiskAssessment(null);
                               setAiDecision(null);
                               setRecoveryAction(null);
@@ -1054,6 +1097,21 @@ function App() {
                     {recoveryAction.status === "completed" && (
                       <div className="outcome-controls">
                         <span className="result-label">Record Outcome</span>
+
+                        <label className="outcome-amount">
+                          Amount recovered
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            max={recoveryCase?.amount_at_risk}
+                            value={amountValue}
+                            onChange={(event) =>
+                              setAmountRecovered(event.target.value)
+                            }
+                            disabled={outcomeLoading}
+                          />
+                        </label>
 
                         <div className="outcome-buttons">
                           <button
