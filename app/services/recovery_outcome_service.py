@@ -82,6 +82,22 @@ class RecoveryOutcomeService:
                     f"of {case.amount_at_risk:.2f} recovered."
                 ),
             )
+        elif status == RecoveryOutcomeStatus.PARTIALLY_RECOVERED:
+            self.recovery_case_repository.update_status(
+                case_id=case.case_id,
+                status=RecoveryCaseStatus.PARTIALLY_RECOVERED,
+            )
+
+            self.audit_event_service.record_event(
+                case_id=case.case_id,
+                event_type=AuditEventType.RECOVERY_COMPLETED,
+                actor="recovery_outcome_service",
+                reason=(
+                    f"Partial recovery: {amount_recovered:.2f} of "
+                    f"{case.amount_at_risk:.2f} recovered."
+                ),
+            )
+
         elif status == RecoveryOutcomeStatus.NOT_RECOVERED:
             self.recovery_case_repository.update_status(
                 case_id=case.case_id,

@@ -11,6 +11,7 @@ class RecoveryCaseStatus(StrEnum):
     EXECUTING = "executing"
     VERIFYING = "verifying"
     RECOVERED = "recovered"
+    PARTIALLY_RECOVERED = "partially_recovered"
     FAILED = "failed"
     STOPPED = "stopped"
     ESCALATED = "escalated"

@@ -26,13 +26,16 @@ def make_action():
     )
 
 
-def make_outcome():
+def make_outcome(
+    status=RecoveryOutcomeStatus.RECOVERED,
+    amount_recovered=Decimal("4999.00"),
+):
     return SimpleNamespace(
         outcome_id="outcome_test_001",
         case_id="case_test_001",
         action_id="action_test_001",
-        status=RecoveryOutcomeStatus.RECOVERED,
-        amount_recovered=Decimal("4999.00"),
+        status=status,
+        amount_recovered=amount_recovered,
         recorded_at=Mock(),
     )
 
@@ -142,3 +145,36 @@ def test_service_rejects_action_from_different_case():
         )
 
     service.recovery_outcome_repository.save.assert_not_called()
+
+
+def test_partial_recovery_updates_the_case_instead_of_leaving_it_created():
+    # A partially recovered outcome used to fall through every branch, so
+    # the outcome saved but the case kept its previous status and the
+    # dashboard showed nothing had happened.
+    db = Mock()
+
+    service = RecoveryOutcomeService(db)
+    service.audit_event_service = Mock()
+
+    service.recovery_case_repository = Mock()
+    service.recovery_action_repository = Mock()
+    service.recovery_outcome_repository = Mock()
+
+    service.recovery_case_repository.get_by_id.return_value = make_case()
+    service.recovery_action_repository.get_by_id.return_value = make_action()
+    service.recovery_outcome_repository.save.return_value = make_outcome(
+        status=RecoveryOutcomeStatus.PARTIALLY_RECOVERED,
+        amount_recovered=Decimal("1200.00"),
+    )
+
+    service.record_outcome(
+        case_id="case_test_001",
+        action_id="action_test_001",
+        status=RecoveryOutcomeStatus.PARTIALLY_RECOVERED,
+        amount_recovered=Decimal("1200.00"),
+    )
+
+    service.recovery_case_repository.update_status.assert_called_once_with(
+        case_id="case_test_001",
+        status=RecoveryCaseStatus.PARTIALLY_RECOVERED,
+    )
