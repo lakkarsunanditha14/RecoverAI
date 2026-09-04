@@ -1945,3 +1945,41 @@ th:nth-child(3) {
     transition: none;
   }
 }
+
+/* Keyboard focus. The stylesheet had exactly one :focus rule, so anyone
+   navigating without a mouse had no idea where they were. :focus-visible
+   keeps the ring off mouse clicks while always showing it for the
+   keyboard. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* A row is clipped by the table, so the ring is drawn inside it. */
+.case-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.case-row {
+  transition: background-color 160ms ease;
+}
+
+.case-row:hover,
+.case-row:focus-visible {
+  background: var(--surface-soft);
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .case-row {
+    transition: none;
+  }
+}
