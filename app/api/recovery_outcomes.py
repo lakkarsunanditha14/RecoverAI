@@ -35,6 +35,33 @@ def get_db():
         db.close()
 
 
+def build_response(outcome):
+    return RecoveryOutcomeResponse(
+        outcome_id=outcome.outcome_id,
+        case_id=outcome.case_id,
+        action_id=outcome.action_id,
+        status=outcome.status,
+        amount_recovered=outcome.amount_recovered,
+        recorded_at=outcome.recorded_at.isoformat(),
+    )
+
+
+@router.get(
+    "/recovery-cases/{case_id}/outcomes",
+    response_model=list[RecoveryOutcomeResponse],
+)
+def get_recovery_case_outcomes(
+    case_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        outcomes = RecoveryOutcomeService(db).get_case_outcomes(case_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return [build_response(outcome) for outcome in outcomes]
+
+
 @router.post(
     "/recovery-cases/{case_id}/outcomes",
     response_model=RecoveryOutcomeResponse,
@@ -54,11 +81,4 @@ def record_recovery_outcome(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
-    return RecoveryOutcomeResponse(
-        outcome_id=outcome.outcome_id,
-        case_id=outcome.case_id,
-        action_id=outcome.action_id,
-        status=outcome.status,
-        amount_recovered=outcome.amount_recovered,
-        recorded_at=outcome.recorded_at.isoformat(),
-    )
+    return build_response(outcome)

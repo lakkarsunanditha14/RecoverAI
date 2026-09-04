@@ -24,6 +24,14 @@ class RecoveryOutcomeService:
         self.recovery_outcome_repository = RecoveryOutcomeRepository(db)
         self.audit_event_service = AuditEventService(db)
 
+    def get_case_outcomes(self, case_id: str) -> list[RecoveryOutcome]:
+        case = self.recovery_case_repository.get_by_id(case_id)
+
+        if case is None:
+            raise ValueError(f"Recovery case not found: {case_id}")
+
+        return self.recovery_outcome_repository.get_by_case_id(case_id)
+
     def record_outcome(
         self,
         case_id: str,
