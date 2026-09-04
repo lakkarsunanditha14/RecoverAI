@@ -86,8 +86,23 @@ function buildSummary(cases) {
 
   const open = cases.filter((item) => !CLOSED_STATUSES.has(item.status));
 
+  // Averaged over assessed cases only. An unassessed case has no
+  // recoverability, and counting it as zero would drag the mean down as
+  // though it had been assessed and found unrecoverable.
+  const assessed = cases.filter(
+    (item) =>
+      item.recoverability_score !== null &&
+      item.recoverability_score !== undefined
+  );
+
   return {
     total: cases.length,
+    assessedCount: assessed.length,
+    recoverability: assessed.length
+      ? Math.round(
+          sum(assessed, (item) => item.recoverability_score) / assessed.length
+        )
+      : null,
     atRisk,
     recovered,
     outstanding: Math.max(atRisk - recovered, 0),
@@ -325,6 +340,21 @@ function App() {
       }),
     [recoveryCases]
   );
+
+  const selectCase = (caseId) => {
+    const selectedCase = recoveryCases.find(
+      (currentCase) => currentCase.case_id === caseId
+    );
+
+    if (!selectedCase) return;
+
+    setRecoveryCase(selectedCase);
+    setAmountRecovered("");
+    setRiskAssessment(null);
+    setAiDecision(null);
+    setRecoveryAction(null);
+    setRecoveryOutcome(null);
+  };
 
   const handleRiskAssessment = async () => {
     if (!recoveryCase) {
@@ -856,8 +886,16 @@ function App() {
                   </div>
                   <div className="stat-content">
                     <span>Recoverable</span>
-                    <strong>73%</strong>
-                    <small>Estimated recoverability</small>
+                    <strong>
+                      {summary.recoverability === null
+                        ? "—"
+                        : `${summary.recoverability}%`}
+                    </strong>
+                    <small>
+                      {summary.recoverability === null
+                        ? "No cases assessed yet"
+                        : `Mean of ${summary.assessedCount} assessed`}
+                    </small>
                   </div>
                 </article>
               </section>
@@ -888,17 +926,17 @@ function App() {
                         <tr
                           key={item.id}
                           className="case-row"
-                          onClick={() => {
-                            const selectedCase = recoveryCases.find(
-                              (currentCase) => currentCase.case_id === item.id
-                            );
-                            if (selectedCase) {
-                              setRecoveryCase(selectedCase);
-                              setAmountRecovered("");
-                              setRiskAssessment(null);
-                              setAiDecision(null);
-                              setRecoveryAction(null);
-                              setRecoveryOutcome(null);
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`Open recovery case for ${item.customer}, ${item.amount}`}
+                          onClick={() => selectCase(item.id)}
+                          onKeyDown={(event) => {
+                            // A row is not a button, so Enter and Space have
+                            // to be wired up for it to be usable without a
+                            // mouse at all.
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              selectCase(item.id);
                             }
                           }}
                         >

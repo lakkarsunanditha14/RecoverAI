@@ -39,7 +39,10 @@ def list_recovery_cases(
             "created_at": case.created_at,
             # None until the case has been assessed, so the dashboard can
             # say so rather than inventing a risk band from the status.
-            "risk_score": risk_scores.get(case.case_id),
+            "risk_score": (risk_scores.get(case.case_id) or {}).get("risk"),
+            "recoverability_score": (
+                risk_scores.get(case.case_id) or {}
+            ).get("recoverability"),
             # What actually came back, which for a partial
             # recovery is less than the amount at risk.
             "amount_recovered": str(recovered.get(case.case_id, 0)),
