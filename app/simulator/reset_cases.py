@@ -35,10 +35,9 @@ def reset() -> tuple[int, int, int]:
     db = SessionLocal()
 
     try:
-        # Prefer a case still in "created" status so the workflow can be
-        # demonstrated from the start, but fall back to the newest case of
-        # any status: dropping a payment off the dashboard entirely is
-        # worse than keeping an already-completed case.
+        # Keep only cases still in "created" status: a case that already
+        # reached an outcome cannot be walked through the workflow again.
+        # Any payment left without one is given a fresh case below.
         keep = [
             row[0]
             for row in db.execute(
@@ -46,10 +45,8 @@ def reset() -> tuple[int, int, int]:
                     """
                     select distinct on (payment_id) case_id
                     from recovery_cases
-                    order by
-                        payment_id,
-                        (status = 'created') desc,
-                        created_at desc
+                    where status = 'created'
+                    order by payment_id, created_at desc
                     """
                 )
             )
