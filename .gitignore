@@ -32,3 +32,7 @@ frontend/.vite/
 
 # Logs
 *.log
+
+# Cloudflare Worker
+cloudflare-worker/node_modules/
+cloudflare-worker/.wrangler/
