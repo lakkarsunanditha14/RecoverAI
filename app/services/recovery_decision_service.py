@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.agents.recovery_decision_agent import RecoveryDecisionAgent
+from app.domain.audit_event import AuditEventType
 from app.domain.recovery_decision import (
     DecisionConfidence,
     RecoveryDecision,
@@ -11,6 +12,7 @@ from app.domain.recovery_decision import (
 from app.repositories.recovery_case_repository import RecoveryCaseRepository
 from app.repositories.recovery_decision_repository import RecoveryDecisionRepository
 from app.repositories.risk_assessment_repository import RiskAssessmentRepository
+from app.services.audit_event_service import AuditEventService
 
 
 class RecoveryDecisionService:
@@ -19,6 +21,7 @@ class RecoveryDecisionService:
         self.recovery_case_repository = RecoveryCaseRepository(db)
         self.recovery_decision_repository = RecoveryDecisionRepository(db)
         self.risk_assessment_repository = RiskAssessmentRepository(db)
+        self.audit_event_service = AuditEventService(db)
         self.agent = RecoveryDecisionAgent()
 
     def create_decision(
@@ -70,4 +73,16 @@ class RecoveryDecisionService:
             created_at=datetime.now(timezone.utc),
         )
 
-        return self.recovery_decision_repository.save(decision)
+        saved_decision = self.recovery_decision_repository.save(decision)
+
+        self.audit_event_service.record_event(
+            case_id=case.case_id,
+            event_type=AuditEventType.POLICY_CHECKED,
+            actor="recovery_decision_service",
+            reason=(
+                f"Recommended {recommended_action} "
+                f"({confidence} confidence): {rationale}"
+            ),
+        )
+
+        return saved_decision

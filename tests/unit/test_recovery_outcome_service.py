@@ -41,6 +41,7 @@ def test_service_records_recovered_outcome_and_updates_case():
     db = Mock()
 
     service = RecoveryOutcomeService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.recovery_action_repository = Mock()
@@ -72,6 +73,7 @@ def test_service_records_not_recovered_outcome_and_marks_case_failed():
     db = Mock()
 
     service = RecoveryOutcomeService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.recovery_action_repository = Mock()
@@ -111,6 +113,7 @@ def test_service_rejects_action_from_different_case():
     db = Mock()
 
     service = RecoveryOutcomeService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.recovery_action_repository = Mock()

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.domain.audit_event import AuditEventType
 from app.domain.payment import Payment, PaymentStatus
 from app.domain.payment_attempt import AttemptStatus, PaymentAttempt
 from app.domain.recovery_case import RecoveryCase, RecoveryCaseStatus
@@ -84,6 +85,21 @@ def make_attempt(number, status):
     )
 
 
+class FakeAuditEventService:
+    def __init__(self):
+        self.recorded_events = []
+
+    def record_event(self, case_id, event_type, actor, reason):
+        self.recorded_events.append(
+            {
+                "case_id": case_id,
+                "event_type": event_type,
+                "actor": actor,
+                "reason": reason,
+            }
+        )
+
+
 def make_service(payment=None, case=None, attempts=None):
     service = RiskAssessmentService.__new__(RiskAssessmentService)
 
@@ -93,6 +109,7 @@ def make_service(payment=None, case=None, attempts=None):
         attempts or []
     )
     service.risk_assessment_repository = FakeRiskAssessmentRepository()
+    service.audit_event_service = FakeAuditEventService()
 
     return service
 
@@ -211,6 +228,7 @@ def test_assessment_is_saved_with_case_and_amount():
     service.recovery_case_repository = FakeRecoveryCaseRepository(make_case())
     service.payment_attempt_repository = FakePaymentAttemptRepository([])
     service.risk_assessment_repository = repository
+    service.audit_event_service = FakeAuditEventService()
 
     assessment = service.assess("case_test_001")
 
@@ -238,3 +256,20 @@ def test_missing_payment_raises_value_error():
 
     with pytest.raises(ValueError, match="Payment not found"):
         service.assess("case_test_001")
+
+
+def test_assessment_records_a_risk_assessed_audit_event():
+    # The audit trail is only as good as the events the services emit:
+    # before this, assessing a case wrote nothing to it.
+    case = make_case()
+    service = make_service(payment=make_payment(), case=case)
+
+    service.assess(case.case_id)
+
+    events = service.audit_event_service.recorded_events
+
+    assert len(events) == 1
+    assert events[0]["case_id"] == case.case_id
+    assert events[0]["event_type"] == AuditEventType.RISK_ASSESSED
+    assert events[0]["actor"] == "risk_assessment_service"
+    assert events[0]["reason"]

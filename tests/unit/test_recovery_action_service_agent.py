@@ -23,6 +23,7 @@ def test_service_proposes_agent_recommended_action():
     db = Mock()
 
     service = RecoveryActionService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.recovery_action_repository = Mock()
@@ -68,6 +69,7 @@ def test_service_falls_back_to_explicit_action_type():
     db = Mock()
 
     service = RecoveryActionService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.recovery_action_repository = Mock()
@@ -100,6 +102,7 @@ def test_service_rejects_missing_case():
     db = Mock()
 
     service = RecoveryActionService(db)
+    service.audit_event_service = Mock()
 
     service.recovery_case_repository = Mock()
     service.recovery_action_repository = Mock()
