@@ -1767,3 +1767,10 @@ table td {
     grid-template-columns: 1fr !important;
   }
 }
+.activity-empty {
+  margin: 0;
+  padding: 18px 4px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: rgba(148, 163, 184, 0.85);
+}

@@ -99,3 +99,7 @@ export async function recordRecoveryOutcome(
 export async function getAuditEvents(caseId) {
   return apiRequest(`/recovery-cases/${caseId}/audit-events`);
 }
+
+export async function getRecentAuditEvents(limit = 6) {
+  return apiRequest(`/audit-events?limit=${limit}`);
+}
