@@ -18,14 +18,17 @@ class RecoveryOutcomeRepository:
         if model is None:
             return None
 
-        return RecoveryOutcome(
-            outcome_id=model.outcome_id,
-            case_id=model.case_id,
-            action_id=model.action_id,
-            status=model.status,
-            amount_recovered=model.amount_recovered,
-            recorded_at=model.recorded_at,
+        return self._to_domain(model)
+
+    def get_by_case_id(self, case_id: str) -> list[RecoveryOutcome]:
+        models = (
+            self.db.query(RecoveryOutcomeModel)
+            .filter(RecoveryOutcomeModel.case_id == case_id)
+            .order_by(RecoveryOutcomeModel.recorded_at.asc())
+            .all()
         )
+
+        return [self._to_domain(model) for model in models]
 
     def save(self, outcome: RecoveryOutcome) -> RecoveryOutcome:
         model = RecoveryOutcomeModel(
@@ -41,6 +44,10 @@ class RecoveryOutcomeRepository:
         self.db.commit()
         self.db.refresh(model)
 
+        return self._to_domain(model)
+
+    @staticmethod
+    def _to_domain(model: RecoveryOutcomeModel) -> RecoveryOutcome:
         return RecoveryOutcome(
             outcome_id=model.outcome_id,
             case_id=model.case_id,

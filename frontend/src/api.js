@@ -96,6 +96,10 @@ export async function recordRecoveryOutcome(
   });
 }
 
+export async function getRecoveryOutcomes(caseId) {
+  return apiRequest(`/recovery-cases/${caseId}/outcomes`);
+}
+
 export async function getAuditEvents(caseId) {
   return apiRequest(`/recovery-cases/${caseId}/audit-events`);
 }

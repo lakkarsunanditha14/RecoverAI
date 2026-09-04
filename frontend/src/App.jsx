@@ -27,6 +27,7 @@ import {
   getRecoveryCases,
   getAuditEvents,
   getRecentAuditEvents,
+  getRecoveryOutcomes,
 } from "./api";
 import "./App.css";
 
@@ -166,6 +167,30 @@ function App() {
       .then(() => setBackendOnline(true))
       .catch(() => setBackendOnline(false));
   }, []);
+
+  // Without this the Recovery Outcomes view only ever showed an outcome
+  // recorded in this browser session, and was empty after a reload.
+  const selectedCaseId = recoveryCase?.case_id;
+
+  useEffect(() => {
+    if (!selectedCaseId) return;
+
+    // Switching cases before the request lands would otherwise show the
+    // previous case's outcome against the new one.
+    let cancelled = false;
+
+    getRecoveryOutcomes(selectedCaseId)
+      .then((outcomes) => {
+        if (!cancelled) setRecoveryOutcome(outcomes.at(-1) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setRecoveryOutcome(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCaseId]);
 
   // Refetched whenever an action lands, so the feed reflects the workflow
   // being driven from this page rather than only the state at page load.
