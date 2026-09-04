@@ -1844,3 +1844,104 @@ td.numeric {
 th:nth-child(3) {
   text-align: right;
 }
+
+/* Recovery progress: a single ratio against a limit, so a meter rather
+   than a chart. Track is a lighter step of the fill's own ramp. */
+.progress-panel {
+  margin-bottom: 22px;
+  padding: 22px 24px 24px;
+}
+
+.progress-rate {
+  font-size: 1.6rem;
+  font-weight: 650;
+  color: var(--success);
+  letter-spacing: -0.02em;
+}
+
+.meter {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--success);
+  transition: width 320ms ease;
+}
+
+.meter-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.meter-legend strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.progress-subhead {
+  margin: 22px 0 8px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Part-to-whole across four buckets. The 2px gaps are surface-coloured
+   so adjacent segments stay separable without borders. */
+.pipeline-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+}
+
+.pipeline-segment {
+  min-width: 6px;
+  border-radius: 3px;
+}
+
+/* Amber sits under 3:1 against the surface, so every segment carries a
+   written label here rather than relying on its colour. */
+.pipeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.pipeline-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pipeline-legend strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill {
+    transition: none;
+  }
+}

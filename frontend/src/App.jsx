@@ -37,43 +37,103 @@ const rupees = (value) =>
 // Derived from the cases the dashboard already loaded. There is no
 // historical snapshot to compare against, so each tile describes the
 // current figure rather than a change over time.
-function buildStats(cases) {
-  const total = (list) =>
-    list.reduce((sum, item) => sum + Number(item.amount_at_risk), 0);
+const CLOSED_STATUSES = new Set([
+  "recovered",
+  "partially_recovered",
+  "failed",
+  "stopped",
+]);
 
-  const recovered = cases.filter((item) => item.status === "recovered");
-  const open = cases.filter((item) => item.status !== "recovered");
+// Case statuses grouped into the four outcomes the pipeline bar shows.
+// Kept to four so each segment can carry a readable label.
+const PIPELINE_BUCKETS = [
+  {
+    key: "open",
+    label: "Open",
+    color: "var(--warning)",
+    match: (status) => !CLOSED_STATUSES.has(status),
+  },
+  {
+    key: "recovered",
+    label: "Recovered",
+    color: "var(--success)",
+    match: (status) => status === "recovered",
+  },
+  {
+    key: "partial",
+    label: "Partially recovered",
+    color: "var(--primary)",
+    match: (status) => status === "partially_recovered",
+  },
+  {
+    key: "unrecovered",
+    label: "Not recovered",
+    color: "var(--danger)",
+    match: (status) => status === "failed" || status === "stopped",
+  },
+];
 
-  const rate = cases.length
-    ? Math.round((recovered.length / cases.length) * 100)
-    : 0;
+function buildSummary(cases) {
+  const sum = (list, pick) =>
+    list.reduce((running, item) => running + Number(pick(item)), 0);
+
+  const atRisk = sum(cases, (item) => item.amount_at_risk);
+
+  // Taken from the outcomes rather than the case amount: a partial
+  // recovery brings back less than the case was worth, and counting the
+  // whole amount (or nothing at all) misstates it in both directions.
+  const recovered = sum(cases, (item) => item.amount_recovered ?? 0);
+
+  const open = cases.filter((item) => !CLOSED_STATUSES.has(item.status));
+
+  return {
+    total: cases.length,
+    atRisk,
+    recovered,
+    outstanding: Math.max(atRisk - recovered, 0),
+    openCount: open.length,
+    closedCount: cases.length - open.length,
+    // By value, not by case count: recovering 24,999 of 55,445 is a very
+    // different result from recovering 899 of it, and counting cases
+    // treats them the same.
+    rate: atRisk ? Math.round((recovered / atRisk) * 100) : 0,
+    pipeline: PIPELINE_BUCKETS.map((bucket) => ({
+      ...bucket,
+      count: cases.filter((item) => bucket.match(item.status)).length,
+    })).filter((bucket) => bucket.count > 0),
+  };
+}
+
+function buildStats(summary) {
+  const { atRisk, recovered, outstanding, openCount, closedCount, rate } =
+    summary;
 
   return [
     {
       label: "Revenue at Risk",
-      value: rupees(total(open)),
-      detail: `${open.length} open ${open.length === 1 ? "case" : "cases"}`,
+      value: rupees(outstanding),
+      detail: `${openCount} open ${openCount === 1 ? "case" : "cases"}`,
       icon: AlertTriangle,
       tone: "danger",
     },
     {
       label: "Revenue Recovered",
-      value: rupees(total(recovered)),
-      detail: `${recovered.length} of ${cases.length} cases`,
+      value: rupees(recovered),
+      detail: `of ${rupees(atRisk)} at risk`,
       icon: Target,
       tone: "success",
     },
     {
       label: "Recovery Rate",
       value: `${rate}%`,
-      detail: "by case count",
+      detail: "by value recovered",
       icon: RefreshCw,
       tone: "primary",
     },
     {
       label: "Recovery Cases",
-      value: String(cases.length),
-      detail: "tracked in total",
+      value: String(summary.total),
+      detail: `${closedCount} closed`,
       icon: CreditCard,
       tone: "warning",
     },
@@ -146,7 +206,8 @@ function App() {
   const [activeView, setActiveView] = useState("dashboard");
 
   const [recoveryCases, setRecoveryCases] = useState([]);
-  const stats = useMemo(() => buildStats(recoveryCases), [recoveryCases]);
+  const summary = useMemo(() => buildSummary(recoveryCases), [recoveryCases]);
+  const stats = useMemo(() => buildStats(summary), [summary]);
   const [recoveryCase, setRecoveryCase] = useState(null);
   const [caseLoading, setCaseLoading] = useState(true);
   const [caseError, setCaseError] = useState("");
@@ -1429,6 +1490,71 @@ function App() {
                     </article>
                   );
                 })}
+              </section>
+
+              <section className="panel progress-panel">
+                <div className="panel-header">
+                  <div>
+                    <p className="eyebrow">RECOVERY PROGRESS</p>
+                    <h3>Recovered against revenue at risk</h3>
+                  </div>
+                  <span className="progress-rate">{summary.rate}%</span>
+                </div>
+
+                <div
+                  className="meter"
+                  role="img"
+                  aria-label={`${rupees(summary.recovered)} recovered of ${rupees(
+                    summary.atRisk
+                  )} at risk`}
+                >
+                  <div
+                    className="meter-fill"
+                    style={{ width: `${summary.rate}%` }}
+                  />
+                </div>
+
+                <div className="meter-legend">
+                  <span>
+                    <strong>{rupees(summary.recovered)}</strong> recovered
+                  </span>
+                  <span>
+                    <strong>{rupees(summary.outstanding)}</strong> outstanding
+                  </span>
+                </div>
+
+                {summary.pipeline.length > 0 && (
+                  <>
+                    <p className="progress-subhead">Cases by outcome</p>
+
+                    <div className="pipeline-bar">
+                      {summary.pipeline.map((bucket) => (
+                        <span
+                          key={bucket.key}
+                          className="pipeline-segment"
+                          style={{
+                            flexGrow: bucket.count,
+                            background: bucket.color,
+                          }}
+                          title={`${bucket.label}: ${bucket.count}`}
+                        />
+                      ))}
+                    </div>
+
+                    <ul className="pipeline-legend">
+                      {summary.pipeline.map((bucket) => (
+                        <li key={bucket.key}>
+                          <span
+                            className="legend-swatch"
+                            style={{ background: bucket.color }}
+                          />
+                          {bucket.label}
+                          <strong>{bucket.count}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </section>
 
               <section className="dashboard-grid">
