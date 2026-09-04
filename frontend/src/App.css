@@ -1,20 +1,44 @@
 :root {
-  --bg: #f4f7fb;
+  /* Near-neutral ground. The old blue-grey tinted every white surface
+     on top of it; this lets the accent be the only real colour. */
+  --bg: #f7f8fa;
   --surface: #ffffff;
-  --surface-soft: #f8fafc;
-  --border: #e6eaf0;
-  --text: #172033;
-  --muted: #6b7587;
-  --primary: #635bff;
-  --primary-dark: #5148e8;
-  --primary-soft: #eeedff;
-  --success: #15966f;
-  --success-soft: #e7f7f1;
-  --danger: #dc4c64;
+  --surface-soft: #f6f7f9;
+  --border: #e4e6ec;
+  --border-strong: #d3d7e0;
+
+  /* Ink. The old body grey sat at 4.1:1 on white, under the 4.5:1
+     minimum, so secondary text failed contrast everywhere it was used. */
+  --text: #0e1420;
+  --muted: #5b6472;
+  /* Measured, not picked by eye: 4.83:1 on white and 4.51:1 on the soft
+     surface, so labels using it clear 4.5:1 on both backgrounds. */
+  --faint: #6b7280;
+
+  --primary: #5b53f0;
+  --primary-dark: #4840d4;
+  --primary-soft: #eeedfe;
+  --success: #0f8a63;
+  --success-soft: #e6f5ef;
+  --danger: #d33f57;
   --danger-soft: #fdecef;
-  --warning: #d58a20;
-  --warning-soft: #fff4df;
-  --shadow: 0 10px 30px rgba(27, 39, 67, 0.06);
+  --warning: #b8761a;
+  --warning-soft: #fdf3e2;
+
+  /* Borders carry the structure; shadows only lift what floats. */
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-lift: 0 4px 16px rgba(16, 24, 40, 0.08);
+
+  --radius: 10px;
+  --radius-sm: 7px;
+
+  /* 4px rhythm, so spacing is chosen from a scale rather than ad hoc. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
 }
 
 * {
@@ -23,6 +47,14 @@
 
 body {
   background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  /* Inter's optical sizing and tighter tracking are most of what makes
+     this read as a product rather than a default page. */
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.006em;
 }
 
 button {
@@ -391,11 +423,17 @@ button {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 20px;
+  padding: var(--s5) 20px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 13px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.stat-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lift);
 }
 
 .stat-icon {
@@ -433,24 +471,29 @@ button {
 
 .stat-content>span {
   display: block;
-  color: var(--muted);
+  color: var(--faint);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .stat-content strong {
   display: block;
-  margin: 7px 0 6px;
-  font-size: 23px;
-  letter-spacing: -0.04em;
+  margin: 10px 0 5px;
+  font-size: 30px;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--text);
 }
 
 .stat-content small {
   display: flex;
   align-items: center;
   gap: 3px;
-  color: var(--success);
-  font-size: 10px;
+  color: var(--faint);
+  font-size: 11.5px;
 }
 
 /* Panels */
@@ -471,7 +514,7 @@ button {
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 13px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 
@@ -729,21 +772,26 @@ table {
 }
 
 th {
-  padding: 0 10px 11px;
+  padding: 0 12px 10px;
   border-bottom: 1px solid var(--border);
-  color: #8b95a7;
-  font-size: 9px;
-  font-weight: 700;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
   text-align: left;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
 }
 
 td {
-  padding: 14px 10px;
-  border-bottom: 1px solid #eef1f5;
-  color: #4d5769;
-  font-size: 11px;
+  padding: 13px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+tbody td:nth-child(2) {
+  color: var(--text);
+  font-weight: 500;
 }
 
 tbody tr:last-child td {
@@ -764,10 +812,10 @@ tbody tr:last-child td {
 .case-status {
   display: inline-flex;
   align-items: center;
-  min-height: 23px;
-  padding: 0 8px;
-  border-radius: 6px;
-  font-size: 9px;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -1536,13 +1584,13 @@ table td {
 }
 
 .stat-icon {
-  width: 42px !important;
-  height: 42px !important;
+  width: 36px !important;
+  height: 36px !important;
 }
 
 .stat-icon svg {
-  width: 21px !important;
-  height: 21px !important;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 .stat-content {
@@ -1980,6 +2028,155 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .case-row {
+    transition: none;
+  }
+}
+
+/* =========================================================
+   VISUAL LAYER
+   Placed last on purpose. Several selectors in this file are
+   defined three to five times over and 82 declarations carry
+   !important, so edits to the base rules above are silently
+   overridden further down. Consolidating the visual decisions
+   here is what makes them actually apply.
+   ========================================================= */
+
+/* Sidebar: the active item gets a rail rather than only a tint, so the
+   current section is readable at a glance and not by colour alone. */
+.sidebar {
+  background: #0d1117;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nav-item {
+  position: relative;
+  min-height: 38px;
+  margin-bottom: 2px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #98a1b1;
+}
+
+.nav-item.active {
+  background: rgba(91, 83, 240, 0.16);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  transform: translateY(-50%);
+  border-radius: 0 3px 3px 0;
+  background: #8079ff;
+}
+
+.nav-label {
+  color: #5d6779;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.brand-mark {
+  border-radius: var(--radius);
+  background: linear-gradient(140deg, #6d64ff, #4840d4);
+  box-shadow: 0 4px 14px rgba(91, 83, 240, 0.35);
+  color: #ffffff;
+}
+
+/* Surfaces: one border weight, one radius, shadow only on hover. */
+.panel,
+.stat-card,
+.modal {
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.stat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+}
+
+.eyebrow,
+.panel-kicker {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  color: var(--faint);
+}
+
+.panel-header h3 {
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.017em;
+}
+
+.page-heading h2 {
+  font-weight: 650;
+  letter-spacing: -0.032em;
+}
+
+/* Tables: rows separate by a hairline and lift on hover, so a long
+   list stays scannable without zebra striping. */
+table td {
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+
+tbody tr {
+  transition: background-color 140ms ease;
+}
+
+tbody tr:hover {
+  background: var(--surface-soft);
+}
+
+.case-id {
+  font-size: 11.5px !important;
+  letter-spacing: -0.01em;
+}
+
+/* Buttons */
+.primary-button {
+  background: var(--primary);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  letter-spacing: -0.006em;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.primary-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.secondary-button {
+  border: 1px solid var(--border-strong) !important;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 550;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  tbody tr,
+  .primary-button,
+  .stat-card {
     transition: none;
   }
 }
