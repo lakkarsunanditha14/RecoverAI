@@ -26,6 +26,25 @@ class RecoveryActionRepository:
             proposed_at=model.proposed_at,
         )
 
+    def list_by_case_id(self, case_id: str) -> list[RecoveryAction]:
+        models = (
+            self.db.query(RecoveryActionModel)
+            .filter(RecoveryActionModel.case_id == case_id)
+            .order_by(RecoveryActionModel.proposed_at.asc())
+            .all()
+        )
+
+        return [
+            RecoveryAction(
+                action_id=model.action_id,
+                case_id=model.case_id,
+                action_type=model.action_type,
+                status=model.status,
+                proposed_at=model.proposed_at,
+            )
+            for model in models
+        ]
+
     def save(self, action: RecoveryAction) -> RecoveryAction:
         model = RecoveryActionModel(
             action_id=action.action_id,

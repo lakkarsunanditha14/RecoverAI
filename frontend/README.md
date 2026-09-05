@@ -1,16 +1,37 @@
-# React + Vite
+# RecoverAI — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + Vite interface for the RecoverAI recovery agent.
 
-Currently, two official plugins are available:
+## Running
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+The API base URL comes from `VITE_API_BASE_URL`. Without it the app falls
+back to `http://127.0.0.1:8000`, which is the local backend.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+For a production build, set the variable first — it is baked into the
+bundle at build time, not read at runtime:
 
-## Expanding the Oxlint configuration
+```bash
+VITE_API_BASE_URL=https://your-backend npm run build
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Checks
+
+```bash
+npm run lint
+npm run build
+```
+
+## What the interface shows
+
+Every figure is read from the backend. Nothing on the dashboard is
+hardcoded: the revenue totals come from recovery outcomes, the risk
+bands from stored risk assessments, the guardrails from
+`GET /recovery-policy`, and the activity feed from audit events.
+
+Recovery execution is a **test simulation** — no payment provider is
+contacted. The interface labels it as such wherever results are shown.

@@ -24,55 +24,57 @@ from app.models.payment_attempt import PaymentAttemptModel
 
 
 # (payment_id, customer_id, amount, payment_status, [attempt statuses])
+#
+# The scenarios are produced by the real pipeline, not asserted here:
+# these payment and attempt shapes drive RiskAssessmentService, whose
+# scores drive the policy, whose decision drives the simulator. The
+# payment ids are chosen so the simulated outcomes are the ones each
+# scenario needs — see tests for the expected spread.
+_FAILED_ONCE = [AttemptStatus.FAILED]
+_THREE_FAILED = [AttemptStatus.FAILED,
+                 AttemptStatus.FAILED, AttemptStatus.FAILED]
+_METHOD_ISSUE = [AttemptStatus.FAILED,
+                 AttemptStatus.FAILED, AttemptStatus.UNKNOWN]
+
 PAYMENTS = [
-    # Referenced by the integration tests; low risk -> retry_payment / high.
-    (
-        "pay_test_001",
-        "cust_test_001",
-        "4999.00",
-        PaymentStatus.PENDING,
-        [AttemptStatus.FAILED],
-    ),
-    # Single failed attempt -> retry_payment / medium.
-    (
-        "pay_1002",
-        "cust_1002",
-        "1299.00",
-        PaymentStatus.FAILED,
-        [AttemptStatus.FAILED],
-    ),
-    # Three failed attempts on a large amount -> manual_review.
-    (
-        "pay_1003",
-        "cust_1003",
-        "24999.00",
-        PaymentStatus.FAILED,
-        [AttemptStatus.FAILED, AttemptStatus.FAILED, AttemptStatus.FAILED],
-    ),
-    # Latest attempt status unknown -> manual_review.
-    (
-        "pay_1004",
-        "cust_1004",
-        "7499.00",
-        PaymentStatus.FAILED,
-        [AttemptStatus.FAILED, AttemptStatus.FAILED, AttemptStatus.UNKNOWN],
-    ),
-    # Still processing -> retry_payment / high.
-    (
-        "pay_1005",
-        "cust_1005",
-        "899.00",
-        PaymentStatus.PENDING,
-        [AttemptStatus.PROCESSING],
-    ),
-    # Two failed attempts -> retry_payment / medium.
-    (
-        "pay_1006",
-        "cust_1006",
-        "15750.00",
-        PaymentStatus.FAILED,
-        [AttemptStatus.FAILED, AttemptStatus.FAILED],
-    ),
+    # Referenced by the integration tests; must stay low risk.
+    ("pay_test_001", "cust_test_001", "4999.00",
+     PaymentStatus.PENDING, _FAILED_ONCE),
+
+    # --- Low risk -> retry_payment, recovers on the first attempt -------
+    ("pay_2004", "cust_2004", "899.00", PaymentStatus.PENDING, _FAILED_ONCE),
+    ("pay_2005", "cust_2005", "1299.00", PaymentStatus.PENDING, _FAILED_ONCE),
+    ("pay_2007", "cust_2007", "2450.00", PaymentStatus.PENDING, _FAILED_ONCE),
+    ("pay_2009", "cust_2009", "3100.00", PaymentStatus.PENDING, _FAILED_ONCE),
+    ("pay_2010", "cust_2010", "6750.00", PaymentStatus.PENDING, _FAILED_ONCE),
+
+    # --- Medium risk -> send_reminder, recovers on a later attempt ------
+    ("pay_2001", "cust_2001", "8400.00", PaymentStatus.PENDING, _THREE_FAILED),
+    ("pay_2002", "cust_2002", "11200.00", PaymentStatus.PENDING, _THREE_FAILED),
+    ("pay_2003", "cust_2003", "9800.00", PaymentStatus.PENDING, _THREE_FAILED),
+    ("pay_2018", "cust_2018", "5300.00", PaymentStatus.PENDING, _THREE_FAILED),
+
+    # --- Medium risk -> send_reminder, fails all three -> escalated -----
+    # These three exercise the retry ladder to exhaustion.
+    ("pay_2014", "cust_2014", "14600.00", PaymentStatus.PENDING, _THREE_FAILED),
+    ("pay_2016", "cust_2016", "7250.00", PaymentStatus.PENDING, _THREE_FAILED),
+    ("pay_2021", "cust_2021", "10400.00", PaymentStatus.PENDING, _THREE_FAILED),
+
+    # --- Payment-method problem -> update_payment_method ----------------
+    ("pay_2006", "cust_2006", "3600.00", PaymentStatus.PENDING, _METHOD_ISSUE),
+    ("pay_2008", "cust_2008", "4150.00", PaymentStatus.PENDING, _METHOD_ISSUE),
+    ("pay_2015", "cust_2015", "2900.00", PaymentStatus.PENDING, _METHOD_ISSUE),
+    ("pay_2019", "cust_2019", "5850.00", PaymentStatus.PENDING, _METHOD_ISSUE),
+
+    # --- High risk -> escalated by policy, nothing executed -------------
+    ("pay_2011", "cust_2011", "24999.00", PaymentStatus.FAILED, _THREE_FAILED),
+    ("pay_2012", "cust_2012", "18300.00", PaymentStatus.FAILED, _THREE_FAILED),
+    ("pay_2013", "cust_2013", "31500.00", PaymentStatus.FAILED, _THREE_FAILED),
+    ("pay_2017", "cust_2017", "15750.00", PaymentStatus.FAILED, _THREE_FAILED),
+
+    # --- High value -> policy review before any automation --------------
+    ("pay_2020", "cust_2020", "75000.00", PaymentStatus.PENDING, _FAILED_ONCE),
+    ("pay_2022", "cust_2022", "120000.00", PaymentStatus.PENDING, _FAILED_ONCE),
 ]
 
 
