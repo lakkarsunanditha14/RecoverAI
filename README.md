@@ -1,1024 +1,390 @@
-# RecoverAI — AI-Assisted Revenue Recovery Platform
+<div align="center">
 
-> An AI-assisted revenue recovery platform that identifies revenue at risk, assesses recovery cases, recommends bounded recovery actions, executes controlled recovery workflows, tracks outcomes, and maintains an auditable history of recovery activity.
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=30&duration=3000&pause=800&color=635BFF&center=true&vCenter=true&width=680&lines=RecoverAI;A+bounded+revenue+recovery+agent;Detect+%E2%86%92+Decide+%E2%86%92+Authorise+%E2%86%92+Execute;It+knows+when+to+stop." alt="RecoverAI" />
 
-[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-Frontend-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
-[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-ORM-D71F00)](https://www.sqlalchemy.org/)
-[![Alembic](https://img.shields.io/badge/Alembic-Migrations-2C5D63)](https://alembic.sqlalchemy.org/)
-[![Testing](https://img.shields.io/badge/Testing-Pytest-0A9EDC?logo=pytest&logoColor=white)](https://pytest.org/)
+### A failed payment is not lost revenue. It is an unfinished decision.
+
+RecoverAI turns failed payments into tracked recovery cases, decides what to do
+about each one, acts within limits it cannot exceed, and stops.
+
+<br />
+
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Postgres](https://img.shields.io/badge/Postgres-Neon-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://neon.tech/)
+
+[![Tests](https://img.shields.io/badge/tests-91_passing-15966F?style=flat-square&logo=pytest&logoColor=white)](#testing)
+[![Coverage](https://img.shields.io/badge/audit_events-15_types-635BFF?style=flat-square)](#the-audit-trail)
+[![Mode](https://img.shields.io/badge/execution-test_simulation-D58A20?style=flat-square)](#test-simulation--read-this-first)
+[![Track](https://img.shields.io/badge/Razorpay_Buildathon-Track_3-0C2451?style=flat-square)](#the-brief)
+
+<br />
+
+**[Live dashboard](https://recover-ai-virid.vercel.app)** &nbsp;·&nbsp;
+**[API](https://recoverai-3at6.onrender.com/docs)** &nbsp;·&nbsp;
+[The loop](#the-recovery-loop) &nbsp;·&nbsp;
+[Guardrails](#bounded-automation) &nbsp;·&nbsp;
+[Run it](#running-it-locally)
+
+</div>
 
 ---
 
-## Overview
+## Test simulation — read this first
 
-RecoverAI is an AI-assisted revenue recovery platform built for the **AI Revenue Recovery** problem space of the Razorpay Buildathon.
+> **Recovery execution is simulated. No payment provider is contacted and no
+> real money moves.**
+>
+> `app/simulator/payment_simulator.py` derives each attempt's result
+> deterministically from the payment id, the attempt number, and the assessed
+> recoverability — so a demonstration replays identically rather than flipping
+> between runs. Every simulated result is labelled `test_simulation` in the API
+> response, in the audit reason, and in the interface.
+>
+> The recovery **engine** is real: assessment, decision, policy authorisation,
+> execution lifecycle, outcome recording, and audit are ordinary application
+> code operating on real database rows. Only the payment provider is simulated.
 
-The platform focuses on a practical problem faced by businesses: a failed or degraded payment does not necessarily mean that the revenue is permanently lost. A payment may fail because of a temporary issue, customer-related circumstances, payment-method problems, or other conditions. Simply detecting the failure is therefore not enough.
-
-RecoverAI turns a payment problem into a structured recovery workflow:
-
-**Detection → Recovery Case → Risk Assessment → AI Decision → Recovery Action → Execution → Outcome → Audit**
-
-The system combines backend services, domain models, AI-assisted agents, recovery policies, persistence, API endpoints, and a React frontend to provide an end-to-end recovery workflow.
+There is also **no LLM in this system.** The decision layer is deterministic
+policy code. That is a deliberate choice, not a missing feature — a recovery
+agent that spends money needs behaviour you can test, reproduce, and explain
+when it refuses.
 
 ---
 
-## The Recovery Agent
+## The brief
 
-RecoverAI is an AI-assisted revenue recovery **agent**: it takes a
-payment that failed, decides what to do about it, does it within
-explicit limits, checks whether it worked, and stops.
+Razorpay Buildathon, **Track 3 — AI Revenue Recovery**. Build an agent that
+detects revenue at risk, determines the appropriate intervention, and executes a
+bounded recovery workflow.
 
-### The loop
+The word that matters in that brief is **bounded**. Detecting failed payments is
+easy. Retrying them is easy. The hard part — and the only part a business would
+actually deploy — is an agent that knows when *not* to act, stops when it has
+succeeded, gives up when it should, and leaves a record of every decision.
 
-```text
-DETECT        a payment at risk becomes a recovery case
-   ↓
-ASSESS        risk and recoverability are scored from the payment
-   ↓          and its attempt history
-DECIDE        the agent recommends one of five recovery strategies
-   ↓
-POLICY CHECK  the policy authorises, refuses, or escalates
-   ↓          — this is binding, not advisory
-EXECUTE       the authorised action runs, up to 3 attempts
-   ↓
-VERIFY        the payment result is checked after each attempt
-   ↓
-RECOVER       stop on success, or escalate to a human on exhaustion
-or ESCALATE
-   ↓
-AUDIT         every step above is written to an immutable trail
+| Requirement | Where it lives |
+|---|---|
+| Detect revenue at risk | `RiskAssessmentService` — scores from payment state and attempt history |
+| Determine intervention | `RecoveryDecisionAgent` — five strategies, selected by recoverability |
+| Execute bounded workflow | `RecoveryOrchestratorService` — max 3 attempts, stops on success |
+| Measure money recovered | `POST /recovery-batch/run` — totals re-read from the database |
+| Compliant escalation | Two distinct paths, both audited |
+| Stopping rules | `RecoveryDecisionPolicy.authorize()` — binding, not advisory |
+| Audit trail | 15 event types, database timestamps, acting service recorded |
+
+---
+
+## The recovery loop
+
+```mermaid
+flowchart TD
+    A["💳 Payment at risk"] --> B["📋 Recovery case created"]
+    B --> C["📊 Risk assessment<br/><i>risk + recoverability scored</i>"]
+    C --> D["🤖 Decision agent<br/><i>recommends a strategy</i>"]
+    D --> E{"🛡️ Policy check<br/><b>binding</b>"}
+
+    E -->|refused| F["🚫 Escalate to human<br/><i>0 attempts used</i>"]
+    E -->|authorised| G["⚡ Execute attempt"]
+
+    G --> H{"🔍 Verify payment"}
+    H -->|succeeded| I["✅ Record outcome<br/>Stop"]
+    H -->|failed, attempts left| G
+    H -->|failed, limit reached| J["⛔ Retry limit<br/>Escalate to human"]
+
+    I --> K["📜 Audit trail"]
+    F --> K
+    J --> K
+
+    style E fill:#635BFF,stroke:#4840D4,color:#fff
+    style I fill:#15966F,stroke:#0F8A63,color:#fff
+    style F fill:#D33F57,stroke:#B03047,color:#fff
+    style J fill:#D33F57,stroke:#B03047,color:#fff
+    style K fill:#0C2451,stroke:#0C2451,color:#fff
 ```
 
-Run it for one case with `POST /recovery-cases/{case_id}/run`, or across
-the open portfolio with `POST /recovery-batch/run`.
+The diamond is the whole design. The agent *recommends*; the policy *decides*.
+Execution is reachable only through an authorised policy decision.
 
-### Bounded automation
+---
 
-The agent recommends; the policy decides. A recommendation cannot reach
-execution unless `RecoveryDecisionPolicy.authorize()` returns it as
-authorised, so the decision layer has no path around the guardrails.
+## Bounded automation
 
-| Guardrail | Limit | Behaviour |
+A recommendation cannot reach execution unless
+`RecoveryDecisionPolicy.authorize()` returns it as authorised. The agent has no
+path around it.
+
+| Guardrail | Limit | Behaviour when hit |
 |---|---|---|
-| Max retries | 3 | Stops and escalates on exhaustion |
-| Recovery window | 7 days | Configurable bound on the recovery period |
-| High risk | score ≥ 70 | Escalates to a human, executes nothing |
-| High value | ≥ ₹50,000 | Requires policy review before automation |
-| Already recovered | — | Stops; never retries a paid payment |
-| Closed case | — | Skipped; duplicate execution is blocked |
+| **Max retries** | 3 | Stops automation, escalates to a human |
+| **Recovery window** | 7 days | Bounds the period a case stays automatable |
+| **High risk** | score ≥ 70 | Escalates, executes **nothing** |
+| **High value** | ≥ ₹50,000 | Requires policy review before any automation |
+| **Already recovered** | — | Stops; never retries a payment that has paid |
+| **Closed case** | — | Skipped entirely; duplicate execution blocked |
 
-The live values are served by `GET /recovery-policy` and rendered
-directly in the interface, so the displayed limits cannot drift from the
-enforced ones.
+These values are served live by `GET /recovery-policy` and rendered directly in
+the dashboard, so the limits shown to a user cannot drift from the limits
+actually enforced.
 
-### Recovery strategies
+### Two ways a human gets involved
 
-The decision layer selects between `retry_payment`, `send_reminder`,
-`update_payment_method`, `offer_alternative_method` and `escalate` based
-on the assessed recoverability — a high-recoverability case is retried,
-a moderate one is prompted, a weak one has its payment method
-questioned, and a high-risk one goes to a human.
+The audit trail distinguishes them, and so does the interface:
 
-### Human escalation
+```mermaid
+flowchart LR
+    subgraph refused ["Refused before execution"]
+        A1["risk = 80"] --> A2["policy: escalate"] --> A3["0 of 3 attempts"]
+    end
+    subgraph exhausted ["Exhausted the ladder"]
+        B1["risk = 40"] --> B2["policy: authorise"] --> B3["3 of 3 attempts"] --> B4["all failed"]
+    end
+    A3 --> C["🙋 Human review"]
+    B4 --> C
 
-Two distinct paths end with a human, and the audit trail distinguishes
-them:
-
-- **`high_risk_case`** — refused before execution, `0` attempts used
-- **`maximum_retry_limit_reached`** — executed and exhausted, `3` attempts used
-
-### Measured recovery
-
-`POST /recovery-batch/run` processes open cases and returns totals that
-are **re-read from the database after the run**, never accumulated by
-the endpoint. Recovered revenue is summed from recovery outcomes, so a
-partial recovery contributes the amount that actually came back rather
-than the full amount at risk.
-
-### Audit trail
-
-Every stage writes an event: `risk_assessed`, `decision_generated`,
-`policy_checked`, `action_authorized`, `action_executed`,
-`payment_verified`, `retry_attempted`, `retry_limit_reached`,
-`outcome_recorded`, `recovery_completed`, `case_stopped`,
-`case_escalated`. Each carries a database timestamp, the acting service,
-and the case it belongs to.
-
-### Test simulation — important
-
-**Recovery execution is simulated. No payment provider is contacted and
-no real money moves.** `app/simulator/payment_simulator.py` derives each
-attempt's result deterministically from the payment id, the attempt
-number and the assessed recoverability, so a demonstration replays
-identically. Every simulated result is labelled `test_simulation` in the
-API response, the audit reason, and the interface.
-
-The recovery *engine* — assessment, decision, policy, execution
-lifecycle, outcome recording and audit — is real application code
-operating on real database records. Only the payment provider is
-simulated.
-
-There is **no LLM in this system.** The decision layer is deterministic
-policy code, which is what makes its behaviour testable and its refusals
-explainable.
-
-### Trying it
-
-```bash
-python -m app.simulator.seed
-python -m app.simulator.reset_cases
+    style A2 fill:#D33F57,stroke:#B03047,color:#fff
+    style B2 fill:#15966F,stroke:#0F8A63,color:#fff
+    style C fill:#635BFF,stroke:#4840D4,color:#fff
 ```
 
-| Scenario | Payment | Expected |
+`high_risk_case` means the agent never touched it. `maximum_retry_limit_reached`
+means it tried everything it was allowed to. Collapsing those two into one
+"escalated" bucket would hide the most interesting thing the system does.
+
+---
+
+## Recovery strategies
+
+The decision layer picks between five actions based on assessed recoverability —
+not "retry everything and hope".
+
+| Recoverability | Strategy | Reasoning |
 |---|---|---|
-| Recovers first attempt | `pay_2004` | `payment_recovered`, 1 attempt |
-| Exhausts retries | `pay_2014` | `maximum_retry_limit_reached`, 3 attempts, escalated |
-| Refused by policy | `pay_2011` | `high_risk_case`, **0 attempts**, escalated |
-| High value review | `pay_2020` | `high_value_requires_policy_review`, 0 attempts |
+| ≥ 80, first attempt | `retry_payment` | A transient failure; retrying is likely to clear it |
+| ≥ 60 | `send_reminder` | The customer needs prompting, not another charge attempt |
+| ≥ 40 | `update_payment_method` | The instrument itself is the obstacle |
+| < 40, or risk ≥ 70 | `escalate` | Below the threshold where automation is appropriate |
 
-```bash
-python -m pytest -q
-```
-## Problem Statement
-
-Revenue leakage can occur when payments fail or remain unresolved.
-
-A conventional payment system may tell a business that a transaction failed, but a revenue recovery workflow needs to go further:
-
-- What is the recovery case?
-- How significant is the revenue at risk?
-- What is the risk associated with the case?
-- What recovery strategy should be considered?
-- Which action is appropriate?
-- Should that action be executed?
-- What happened after the action?
-- Was revenue recovered?
-- Can the complete process be audited?
-
-RecoverAI is designed to connect these stages into a single workflow rather than treating payment failure, decision-making, action execution, and recovery measurement as isolated operations.
+`offer_alternative_method` and `manual_review` are also defined in the domain and
+available to the action layer.
 
 ---
 
-## Razorpay Buildathon Track
+## Architecture
 
-RecoverAI is aligned with the **AI Revenue Recovery** track of the Razorpay Buildathon.
+```mermaid
+flowchart TB
+    UI["⚛️ React 19 + Vite<br/><i>dashboard, agent controls, audit timeline</i>"]
+    API["🚀 FastAPI<br/><i>26 routes</i>"]
+    ORC["🧠 Recovery Orchestrator<br/><i>the closed loop</i>"]
 
-The track asks teams to build an agent capable of detecting revenue at risk, determining an appropriate intervention, and executing a bounded recovery workflow.
+    subgraph domainlayer ["Decision layer"]
+        AG["Decision + Action agents"]
+        POL["🛡️ Recovery policy<br/><b>authorisation boundary</b>"]
+    end
 
-RecoverAI implements this concept through a controlled architecture:
+    subgraph servicelayer ["Services"]
+        RISK["Risk assessment"]
+        EXEC["Action execution"]
+        OUT["Outcome recording"]
+        AUD["Audit events"]
+    end
 
-```text
-Revenue at Risk
-       │
-       ▼
-Recovery Case
-       │
-       ▼
-Risk Assessment
-       │
-       ▼
-AI-Assisted Decision
-       │
-       ▼
-Recovery Action
-       │
-       ▼
-Controlled Execution
-       │
-       ▼
-Recovery Outcome
-       │
-       ▼
-Audit Trail
+    REPO["📚 Repositories"]
+    DB[("🗄️ PostgreSQL<br/>Neon · 15 migrations")]
+    SIM["🧪 Payment simulator<br/><i>test simulation</i>"]
+
+    UI -->|HTTP/JSON| API
+    API --> ORC
+    ORC --> AG --> POL
+    POL -->|authorised only| EXEC
+    ORC --> RISK & OUT & AUD
+    EXEC --> SIM
+    RISK & EXEC & OUT & AUD --> REPO --> DB
+
+    style POL fill:#635BFF,stroke:#4840D4,color:#fff
+    style ORC fill:#0C2451,stroke:#0C2451,color:#fff
+    style SIM fill:#D58A20,stroke:#B8761A,color:#fff
 ```
 
-The important design principle is that AI-assisted decision making is combined with **bounded actions, explicit policies, outcome tracking, and auditability** rather than allowing unrestricted automation.
-
----
-
-## Objectives
-
-RecoverAI is designed to:
-
-1. Identify and structure revenue-recovery opportunities.
-2. Represent payment problems as recovery cases.
-3. Assess the risk associated with recovery cases.
-4. Use AI-assisted decision logic to recommend recovery strategies.
-5. Apply recovery decision policies before actions are executed.
-6. Generate bounded recovery actions.
-7. Execute actions through a dedicated service layer.
-8. Record recovery outcomes.
-9. Track recovered revenue.
-10. Maintain an audit trail of important recovery events.
-11. Expose the recovery workflow through backend APIs.
-12. Provide a frontend interface for monitoring and operating recovery cases.
-13. Maintain separation between domain logic, services, persistence, APIs, and presentation.
-
----
-
-# System Architecture
-
-RecoverAI follows a layered architecture where each major responsibility is separated into its own component.
-
-```text
-                         ┌──────────────────────┐
-                         │    React Frontend    │
-                         │   Dashboard / UI     │
-                         └──────────┬───────────┘
-                                    │
-                                    │ HTTP / JSON
-                                    ▼
-                         ┌──────────────────────┐
-                         │     FastAPI API      │
-                         │     API Layer        │
-                         └──────────┬───────────┘
-                                    │
-                 ┌──────────────────┼──────────────────┐
-                 │                  │                  │
-                 ▼                  ▼                  ▼
-        ┌────────────────┐ ┌────────────────┐ ┌────────────────┐
-        │ Recovery Case  │ │ Risk Assessment│ │ Recovery       │
-        │ APIs / Service │ │ APIs / Service │ │ Decision APIs  │
-        └────────┬───────┘ └────────┬───────┘ └────────┬───────┘
-                 │                  │                  │
-                 └──────────────────┼──────────────────┘
-                                    ▼
-                         ┌──────────────────────┐
-                         │     AI Agents        │
-                         │                      │
-                         │ Decision Agent       │
-                         │ Action Agent         │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │ Recovery Policies    │
-                         │ Bounded Decisions    │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │ Recovery Action      │
-                         │ Execution Service    │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │ Recovery Outcomes    │
-                         │ & Recovered Revenue  │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │     Audit Events     │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                         ┌──────────────────────┐
-                         │ SQL Database / ORM   │
-                         │ SQLAlchemy + Alembic │
-                         └──────────────────────┘
-```
-
----
-
-# End-to-End Recovery Workflow
-
-A recovery case moves through several stages.
-
-## 1. Payment / Revenue Risk
-
-A payment and its associated attempts provide the starting point for identifying a recovery opportunity.
-
-The system maintains structured information about:
-
-- Customers
-- Payments
-- Payment attempts
-- Recovery cases
-
----
-
-## 2. Recovery Case Creation
-
-A failed or problematic payment can be represented as a **Recovery Case**.
-
-The recovery case becomes the central object connecting the different stages of the recovery workflow.
-
-It provides a structured representation of the revenue that requires recovery attention.
-
----
-
-## 3. Risk Assessment
-
-The system performs a risk assessment for the recovery case.
-
-The risk-assessment layer provides structured information that can be used by downstream recovery decision logic.
-
-This allows the recovery workflow to consider the characteristics of a case instead of applying exactly the same recovery approach to every payment failure.
-
----
-
-## 4. AI-Assisted Recovery Decision
-
-RecoverAI contains a dedicated **Recovery Decision Agent**.
-
-The agent is responsible for AI-assisted recovery decision logic.
-
-The decision is not treated as an unrestricted command. It is passed through the application's recovery decision policy and service layers.
-
-Conceptually:
-
-```text
-Recovery Case
-     │
-     ▼
-Risk Assessment
-     │
-     ▼
-Recovery Decision Agent
-     │
-     ▼
-Recovery Decision
-     │
-     ▼
-Decision Policy
-     │
-     ▼
-Approved / Bounded Recovery Action
-```
-
-This separation makes the AI decision process easier to inspect, test, and control.
-
----
-
-## 5. Recovery Action Generation
-
-Once a recovery strategy has been determined, RecoverAI creates a structured recovery action.
-
-Recovery actions are represented as first-class domain and persistence objects rather than being hidden inside a single API operation.
-
-This provides a clear distinction between:
-
-- What the system decided
-- What action was created
-- Whether the action was executed
-- What happened after execution
-
----
-
-## 6. Controlled Action Execution
-
-Recovery action execution is handled through a dedicated execution service.
-
-This provides a controlled boundary between deciding an action and actually executing it.
-
-```text
-AI Decision
-     │
-     ▼
-Policy Validation
-     │
-     ▼
-Recovery Action
-     │
-     ▼
-Execution Service
-     │
-     ▼
-Execution Result
-```
-
-The execution layer also integrates with audit-event recording so that important recovery operations remain traceable.
-
----
-
-## 7. Recovery Outcome
-
-After an action has been executed, its result can be recorded as a **Recovery Outcome**.
-
-The outcome records whether the recovery attempt was successful and can capture the amount of revenue recovered.
-
-This creates the measurement stage of the workflow:
-
-```text
-Recovery Action
-      │
-      ▼
-Execution
-      │
-      ▼
-Outcome
-      │
-      ▼
-Amount Recovered
-```
-
----
-
-## 8. Audit Trail
-
-RecoverAI includes an audit-event layer for tracking important operations throughout the recovery lifecycle.
-
-The audit trail is designed to provide visibility into:
-
-- Recovery decisions
-- Recovery actions
-- Action execution
-- Recovery outcomes
-- Important recovery-case events
-
-This makes the recovery process easier to inspect and understand after an operation has taken place.
-
----
-
-# Core Components
-
-## AI Agents
-
-The project contains dedicated agents for recovery decision making and recovery action generation.
-
-### Recovery Decision Agent
-
-Located at:
-
-```text
-app/agents/recovery_decision_agent.py
-```
-
-Responsible for AI-assisted recovery decision logic.
-
-### Recovery Action Agent
-
-Located at:
-
-```text
-app/agents/recovery_action_agent.py
-```
-
-Responsible for generating structured recovery actions based on the recovery workflow.
-
----
-
-# Backend Architecture
-
-The backend is implemented using **Python and FastAPI**.
-
-The backend is separated into several layers.
+Layered deliberately: API handlers stay thin, services hold the workflow,
+repositories own persistence, and the domain has no framework imports at all.
 
 ```text
 app/
-├── agents/
-├── api/
-├── core/
-├── domain/
-├── models/
-├── policies/
-├── repositories/
-├── services/
-└── simulator/
-```
-
-Each layer has a specific responsibility.
-
----
-
-## API Layer
-
-Located in:
-
-```text
-app/api/
-```
-
-The API layer exposes the recovery workflow through FastAPI endpoints.
-
-The project includes APIs for:
-
-- Recovery cases
-- Risk assessments
-- Recovery decisions
-- Recovery actions
-- Recovery outcomes
-- Audit events
-
-The API layer communicates with the service layer instead of placing the complete business workflow directly inside route handlers.
-
----
-
-## Service Layer
-
-Located in:
-
-```text
-app/services/
-```
-
-The service layer contains application-level business workflows.
-
-Implemented service areas include:
-
-- Recovery case service
-- Risk assessment service
-- Recovery decision service
-- Recovery action service
-- Recovery action execution service
-- Recovery outcome service
-- Audit event service
-
-This separation keeps API handlers lightweight and places business operations inside reusable service components.
-
----
-
-## Domain Layer
-
-Located in:
-
-```text
-app/domain/
-```
-
-The domain layer represents core business concepts within RecoverAI.
-
-The project contains domain representations for:
-
-- Customer
-- Payment
-- Payment attempt
-- Recovery case
-- Recovery decision
-- Recovery action
-- Recovery outcome
-- Risk assessment
-- Audit event
-
-This allows the recovery workflow to be represented using explicit business concepts rather than loosely structured data.
-
----
-
-## Repository Layer
-
-Located in:
-
-```text
-app/repositories/
-```
-
-Repositories provide persistence-related operations for the application's entities.
-
-The project includes repositories for:
-
-- Customers
-- Payments
-- Payment attempts
-- Recovery cases
-- Recovery decisions
-- Recovery actions
-- Recovery outcomes
-- Risk assessments
-- Audit events
-
-This separates database access from higher-level business logic.
-
----
-
-## Policy Layer
-
-Located in:
-
-```text
-app/policies/
-```
-
-The recovery decision policy provides an additional control layer around recovery decisions.
-
-This is important for the project's **bounded recovery** approach.
-
-Instead of allowing an AI component to directly perform arbitrary operations, the application separates:
-
-```text
-AI Recommendation
-        ↓
-Policy
-        ↓
-Allowed Recovery Decision
+├── agents/        decision and action agents
+├── api/           FastAPI routers — thin, no business logic
+├── core/          database engine and session
+├── domain/        9 dataclasses + enums, zero framework dependencies
+├── models/        SQLAlchemy ORM mappings
+├── policies/      the authorisation boundary
+├── repositories/  persistence, one per aggregate
+├── services/      workflow, including the orchestrator
+└── simulator/     seed data, reset, payment simulation
 ```
 
 ---
 
-# Data Model
+## The audit trail
 
-RecoverAI uses SQLAlchemy for ORM-based database interaction and Alembic for schema migrations.
-
-The main entities are:
-
-```text
-Customer
-   │
-   └── Payment
-          │
-          └── Payment Attempt
-                 │
-                 └── Recovery Case
-                        ├── Risk Assessment
-                        ├── Recovery Decision
-                        ├── Recovery Action
-                        │       │
-                        │       └── Execution
-                        │
-                        ├── Recovery Outcome
-                        │
-                        └── Audit Events
-```
-
-The database structure is maintained through versioned Alembic migrations.
-
----
-
-# Database & Migrations
-
-Database configuration is handled through:
+Fifteen event types, written by the service that acted, timestamped by the
+database. A completed recovery reads as a chronology:
 
 ```text
-app/core/database.py
+ 1  risk_assessed         risk_assessment_service     Risk 0, recoverability 100
+ 2  policy_checked        recovery_decision_policy    factors: risk=0 retry=0/3
+ 3  decision_generated    recovery_decision_agent     recommended retry_payment
+ 4  action_authorized     recovery_decision_policy    attempt 1/3 authorised
+ 5  action_executed       recovery_action_service     approved → started → done
+ 6  payment_verified      payment_simulator           TEST SIMULATION: succeeded
+ 7  outcome_recorded      recovery_outcome_service     4999.00 recovered
+ 8  recovery_completed    recovery_outcome_service     4999.00 of 4999.00
+ 9  case_stopped          orchestrator                 automation stopped
 ```
 
-Database schema evolution is managed using **Alembic**.
+A refused case is three events and stops at the policy. An exhausted case runs to
+eleven and ends in `retry_limit_reached` → `case_escalated`. Nothing is
+fabricated in the frontend; every timestamp is the one stored in Postgres.
 
-Migration files are stored under:
+<details>
+<summary><b>All 15 event types</b></summary>
 
-```text
-alembic/versions/
-```
+<br />
 
-The migration history covers the creation and relationships of the major recovery entities, including:
-
-- Customers
-- Payments
-- Payment attempts
-- Recovery cases
-- Risk assessments
-- Recovery decisions
-- Recovery actions
-- Recovery outcomes
-- Audit events
-
-Foreign-key migrations are also used to connect related recovery entities.
-
-This allows the database schema to evolve in a controlled and reproducible manner.
-
----
-
-# Frontend
-
-The frontend is implemented using:
-
-- React
-- Vite
-- JavaScript
-- CSS
-- Lucide React icons
-
-The frontend source code is located under:
-
-```text
-frontend/src/
-```
-
-Main frontend files include:
-
-```text
-frontend/
-├── index.html
-├── package.json
-├── package-lock.json
-├── vite.config.js
-└── src/
-    ├── api.js
-    ├── App.jsx
-    ├── App.css
-    ├── index.css
-    └── main.jsx
-```
-
----
-
-## Frontend Responsibilities
-
-The React frontend provides an interface for interacting with the recovery platform.
-
-It communicates with the backend through the API layer.
-
-The frontend API module:
-
-```text
-frontend/src/api.js
-```
-
-contains functions for communicating with recovery-related backend endpoints, including operations related to:
-
-- Recovery cases
-- Recovery decisions
-- Recovery actions
-- Recovery outcomes
-- Audit events
-
-The separation of API communication from the main React application keeps frontend data-access logic organized.
-
----
-
-# API Flow
-
-The overall application communication can be represented as:
-
-```text
-React UI
-   │
-   ▼
-frontend/src/api.js
-   │
-   │ HTTP / JSON
-   ▼
-FastAPI
-   │
-   ▼
-API Routes
-   │
-   ▼
-Services
-   │
-   ├── Agents
-   ├── Policies
-   └── Repositories
-           │
-           ▼
-       Database
-```
-
-This architecture allows the frontend to remain independent of the backend's internal implementation details.
-
----
-
-# API Areas
-
-The backend currently organizes recovery functionality around the following API modules:
-
-```text
-app/api/
-├── recovery_cases.py
-├── risk_assessments.py
-├── recovery_decisions.py
-├── recovery_actions.py
-├── recovery_outcomes.py
-└── audit_events.py
-```
-
-These APIs collectively expose the main stages of the recovery lifecycle.
-
-The application entry point is:
-
-```text
-app/main.py
-```
-
----
-
-# Testing
-
-RecoverAI includes both **unit tests and integration tests**.
-
-The testing structure is:
-
-```text
-tests/
-├── unit/
-├── integration/
-└── evaluation/
-```
-
-The tests cover important areas including:
-
-### Unit Testing
-
-Unit tests cover components such as:
-
-- Payment domain logic
-- Recovery decision agent
-- Recovery action agent
-- Recovery decision policy
-- Recovery decision service
-- Recovery action service
-- Recovery action execution
-- Recovery outcome service
-- Risk assessment service
-- Recovery action domain behavior
-
-### Integration Testing
-
-Integration tests cover workflows and APIs such as:
-
-- Recovery flow
-- AI decision API
-- AI recovery action API
-- Recovery action execution API
-- Recovery outcome API
-- Risk assessment API
-- Audit event API
-
-The test suite is intended to validate both individual components and the interaction between major parts of the recovery workflow.
-
----
-
-# Project Structure
-
-```text
-recoverai/
-│
-├── app/
-│   ├── agents/
-│   │   ├── recovery_action_agent.py
-│   │   └── recovery_decision_agent.py
-│   │
-│   ├── api/
-│   │   ├── audit_events.py
-│   │   ├── recovery_actions.py
-│   │   ├── recovery_cases.py
-│   │   ├── recovery_decisions.py
-│   │   ├── recovery_outcomes.py
-│   │   └── risk_assessments.py
-│   │
-│   ├── core/
-│   │   └── database.py
-│   │
-│   ├── domain/
-│   │   ├── audit_event.py
-│   │   ├── customer.py
-│   │   ├── payment.py
-│   │   ├── payment_attempt.py
-│   │   ├── recovery_action.py
-│   │   ├── recovery_case.py
-│   │   ├── recovery_decision.py
-│   │   ├── recovery_outcome.py
-│   │   └── risk_assessment.py
-│   │
-│   ├── models/
-│   │   ├── audit_event.py
-│   │   ├── base.py
-│   │   ├── customer.py
-│   │   ├── payment.py
-│   │   ├── payment_attempt.py
-│   │   ├── recovery_action.py
-│   │   ├── recovery_case.py
-│   │   ├── recovery_decision.py
-│   │   ├── recovery_outcome.py
-│   │   └── risk_assessment.py
-│   │
-│   ├── policies/
-│   │   └── recovery_decision_policy.py
-│   │
-│   ├── repositories/
-│   │   ├── audit_event_repository.py
-│   │   ├── customer_repository.py
-│   │   ├── payment_attempt_repository.py
-│   │   ├── payment_repository.py
-│   │   ├── recovery_action_repository.py
-│   │   ├── recovery_case_repository.py
-│   │   ├── recovery_decision_repository.py
-│   │   ├── recovery_outcome_repository.py
-│   │   └── risk_assessment_repository.py
-│   │
-│   ├── services/
-│   │   ├── audit_event_service.py
-│   │   ├── recovery_action_execution_service.py
-│   │   ├── recovery_action_service.py
-│   │   ├── recovery_case_service.py
-│   │   ├── recovery_decision_service.py
-│   │   ├── recovery_outcome_service.py
-│   │   └── risk_assessment_service.py
-│   │
-│   ├── simulator/
-│   │
-│   └── main.py
-│
-├── alembic/
-│   ├── versions/
-│   ├── env.py
-│   └── script.py.mako
-│
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── api.js
-│   │   ├── App.jsx
-│   │   ├── App.css
-│   │   ├── index.css
-│   │   └── main.jsx
-│   ├── index.html
-│   ├── package.json
-│   ├── package-lock.json
-│   └── vite.config.js
-│
-├── tests/
-│   ├── evaluation/
-│   ├── integration/
-│   └── unit/
-│
-├── alembic.ini
-├── requirements.txt
-├── .gitignore
-└── README.md
-```
-
----
-
-# Technology Stack
-
-| Layer | Technology |
+| Event | Written by |
 |---|---|
-| Frontend | React |
-| Frontend Build Tool | Vite |
-| Frontend Icons | Lucide React |
-| Backend | Python |
-| API Framework | FastAPI |
-| ORM | SQLAlchemy |
-| Database Migration | Alembic |
-| Testing | Pytest |
-| API Communication | HTTP / JSON |
-| Architecture | Layered / Service-oriented backend |
+| `payment_received` / `payment_failed` | payment lifecycle |
+| `risk_assessed` | `RiskAssessmentService` |
+| `decision_generated` | orchestrator, after the agent |
+| `policy_checked` | `RecoveryDecisionPolicy` |
+| `action_proposed` | `RecoveryActionService` |
+| `action_authorized` | policy, before execution |
+| `action_executed` | `RecoveryActionExecutionService` |
+| `payment_verified` | payment simulator |
+| `retry_attempted` | orchestrator, between attempts |
+| `retry_limit_reached` | orchestrator, on exhaustion |
+| `outcome_recorded` | `RecoveryOutcomeService` |
+| `recovery_completed` | on a successful or partial recovery |
+| `case_escalated` | either escalation path |
+| `case_stopped` | on any terminal stop |
+
+</details>
 
 ---
 
-# Installation
+## Measured recovery
 
-## 1. Clone the Repository
+`POST /recovery-batch/run` processes open cases through the same orchestrator a
+single case uses — there is no separate "demo mode" that produces nicer numbers.
 
-```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd recoverai
+Every figure it returns is **re-read from the database after the run**, never
+accumulated by the endpoint while looping:
+
+```json
+{
+  "cases_processed": 3,
+  "cases_remaining": 25,
+  "total_revenue_at_risk": 438942.0,
+  "revenue_recovered": 88645.0,
+  "remaining_revenue_at_risk": 350297.0,
+  "recovery_rate": 20.2,
+  "recovered_cases": 17,
+  "escalated_cases": 11,
+  "mode": "test_simulation"
+}
 ```
 
-## 2. Create a Python Virtual Environment
+Two identities must always hold, and there are tests asserting both:
 
-```bash
-python3 -m venv .venv
+```text
+revenue_recovered + remaining_revenue_at_risk == total_revenue_at_risk
+recovered + failed + escalated + stopped + active == total cases
 ```
 
-Activate it:
+Recovered revenue is summed from **recovery outcomes**, so a partial recovery
+contributes the amount that actually came back rather than the full amount at
+risk — a distinction that quietly inflates most recovery dashboards.
+
+---
+
+## API
+
+<details open>
+<summary><b>The agent</b></summary>
+
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/recovery-cases/{case_id}/run` | Run the full loop for one case |
+| `POST` | `/recovery-batch/run?limit=N` | Run a bounded slice of open cases |
+| `GET` | `/recovery-policy` | The guardrails actually enforced |
+
+</details>
+
+<details>
+<summary><b>Cases, assessment, decisions</b></summary>
+
+| Method | Route |
+|---|---|
+| `GET` | `/recovery-cases` |
+| `POST` | `/recovery-cases/{payment_id}` |
+| `GET` | `/recovery-cases/{case_id}` |
+| `POST` | `/recovery-cases/{case_id}/risk-assessments` |
+| `POST` | `/recovery-cases/{case_id}/decisions` · `/decisions/ai` |
+
+</details>
+
+<details>
+<summary><b>Actions, outcomes, audit</b></summary>
+
+| Method | Route |
+|---|---|
+| `POST` | `/recovery-cases/{case_id}/actions` · `/ai-action` |
+| `POST` | `/recovery-actions/{action_id}/approve` · `start` · `complete` · `fail` |
+| `GET` `POST` | `/recovery-cases/{case_id}/outcomes` |
+| `GET` `POST` | `/recovery-cases/{case_id}/audit-events` |
+| `GET` | `/audit-events?limit=N` |
+
+> These individual endpoints exist for manual operation and debugging. They are
+> **operator tools and are not policy-gated** — the bounded guarantees described
+> above apply to the orchestrated path (`/run` and `/recovery-batch/run`), which
+> is what the interface uses.
+
+</details>
+
+---
+
+## Running it locally
+
+**Requires** Python 3.12+, Node 22+, and a PostgreSQL connection string.
 
 ```bash
-source .venv/bin/activate
-```
+git clone https://github.com/lakkarsunanditha14/RecoverAI.git
+cd RecoverAI
 
-## 3. Install Backend Dependencies
-
-```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+cp .env.example .env      # then set DATABASE_URL
+alembic upgrade head
 ```
 
-## 4. Install Frontend Dependencies
+> **`DATABASE_URL` must use the psycopg 3 prefix.** Neon hands you
+> `postgresql://…`, which SQLAlchemy resolves to psycopg **2** and fails on:
+>
+> ```text
+> postgresql+psycopg://user:pass@host/db?sslmode=require
+> ```
+
+Seed the demo batch and start the API:
 
 ```bash
-cd frontend
-npm install
-cd ..
-```
-
----
-
-# Environment Configuration
-
-RecoverAI uses environment configuration for local development.
-
-Create a local `.env` file based on the configuration required by the application.
-
-**Do not commit secrets, API keys, credentials, or private environment configuration to GitHub.**
-
-The repository's `.gitignore` is configured to keep environment and generated files out of source control.
-
----
-
-# Running the Backend
-
-From the project root, activate the virtual environment and start the FastAPI application.
-
-```bash
-source .venv/bin/activate
+python -m app.simulator.seed          # 23 payments across every scenario
+python -m app.simulator.reset_cases   # clean, repeatable starting state
 uvicorn app.main:app --reload
 ```
 
-The API will be available locally through the configured FastAPI development server.
-
-FastAPI also provides interactive API documentation through its standard documentation endpoints.
-
----
-
-# Running the Frontend
-
-Open another terminal:
+Frontend, in a second terminal:
 
 ```bash
 cd frontend
@@ -1026,280 +392,103 @@ npm install
 npm run dev
 ```
 
-Vite will start the React development server and provide the local frontend URL.
-
 ---
 
-# Database Migrations
+## Try the agent
 
-To apply the existing Alembic migrations:
+The seeded batch is engineered so each scenario is reachable and reproducible.
+
+| Try this | Payment | What happens |
+|---|---|---|
+| 🟢 **Clean recovery** | `pay_2004` | Recovers on attempt 1 · `payment_recovered` |
+| 🟡 **Retry ladder** | `pay_2001` | Fails, retries, recovers on a later attempt |
+| 🔴 **Exhausted** | `pay_2014` | 3 of 3 attempts fail · `maximum_retry_limit_reached` · escalated |
+| 🛑 **Refused** | `pay_2011` | **0 attempts** · `high_risk_case` · policy blocked it |
+| 💰 **High value** | `pay_2020` | ₹75,000 · `high_value_requires_policy_review` |
 
 ```bash
-alembic upgrade head
+python -c "
+from fastapi.testclient import TestClient
+from app.main import app
+c = TestClient(app)
+for pid in ['pay_2004','pay_2014','pay_2011']:
+    cid = next(x['case_id'] for x in c.get('/recovery-cases').json() if x['payment_id']==pid)
+    r = c.post(f'/recovery-cases/{cid}/run').json()
+    print(f\"{pid}: {r['status']:10} {r['attempt_number']}/3  {r['stop_reason']}\")
+"
 ```
 
-To create a new migration during development:
+Compare `pay_2011` and `pay_2014`. Both escalate to a human. One used every
+attempt it had; the other was never allowed to start. That difference is the
+entire argument for bounded automation.
+
+---
+
+## Testing
 
 ```bash
-alembic revision --autogenerate -m "describe migration"
+python -m pytest -q                    # 91 tests
+python -m pytest tests/unit -q         # 67, no database, ~2s
+python -m pytest tests/integration -q  # 24, hits the database
+python -m app.simulator.reset_cases    # reset afterwards
 ```
-
-Then apply it using:
-
-```bash
-alembic upgrade head
-```
-
----
-
-# Example Recovery Scenario
-
-A simplified recovery scenario looks like this:
 
 ```text
-1. A payment fails
-        │
-        ▼
-2. A recovery case is created
-        │
-        ▼
-3. The case is assessed for risk
-        │
-        ▼
-4. AI-assisted logic evaluates the case
-        │
-        ▼
-5. A recovery decision is generated
-        │
-        ▼
-6. The decision policy validates the recovery path
-        │
-        ▼
-7. A bounded recovery action is created
-        │
-        ▼
-8. The action execution service executes the action
-        │
-        ▼
-9. The recovery result is recorded
-        │
-        ▼
-10. Recovered amount is tracked
-        │
-        ▼
-11. Relevant events are recorded in the audit trail
+91 passed
 ```
 
-This creates a complete feedback loop from identifying revenue risk to measuring the recovery result.
+The suite covers the strategy table, every guardrail in `authorize()`, the
+simulator's determinism, the retry ladder at each attempt, stop-on-success,
+duplicate-execution blocking, audit event ordering, and the batch metric
+identities.
+
+One test exists purely to fail loudly if the strategy table ever regresses to
+returning `retry_payment` for everything — the failure mode this system is
+designed to avoid.
+
+> Integration tests write to the configured database. Run
+> `python -m app.simulator.reset_cases` afterwards before demonstrating.
 
 ---
 
-# Design Principles
+## Known limits
 
-## 1. Bounded AI
+Stated plainly, because a submission that hides its edges is worse than one that
+names them.
 
-AI-assisted decisions are separated from action execution.
-
-The system uses explicit application logic and recovery policies to control how recovery decisions progress into actions.
-
----
-
-## 2. Separation of Concerns
-
-The backend separates:
-
-```text
-API
- ↓
-Service
- ↓
-Domain / Policy / Agent
- ↓
-Repository
- ↓
-Database
-```
-
-This makes the application easier to test, maintain, and extend.
+| Limit | Detail |
+|---|---|
+| **Batch latency** | A full retry ladder costs ~40 commits. Against a remote database that is seconds per case; the endpoint is chunked via `?limit=N` so no single request times out. The real fix is one transaction per case. |
+| **Manual endpoints are ungated** | The lifecycle routes bypass `authorize()` by design, as operator tools. Only the orchestrated path is bounded. |
+| **No partial recovery from automation** | The orchestrator records `recovered` or `not_recovered`. Partial outcomes are reachable through the manual outcome flow. |
+| **Simulated execution** | No payment provider integration. See the notice at the top. |
+| **No authentication** | Every endpoint is open. This is a prototype, not a deployed product. |
 
 ---
 
-## 3. Auditability
+## Roadmap
 
-Important recovery events are represented through audit-event functionality.
-
-This provides visibility into what happened during the recovery lifecycle.
-
----
-
-## 4. Outcome-Based Recovery
-
-The system does not stop after recommending or executing an action.
-
-Recovery outcomes are recorded so that the workflow can distinguish between:
-
-```text
-Decision
-   ≠
-Action
-   ≠
-Execution
-   ≠
-Recovered Revenue
-```
-
-This is important when evaluating whether a recovery strategy actually produced a useful result.
+- One transaction per case, cutting batch latency by an order of magnitude
+- Policy authorisation on the manual endpoints, closing the operator gap
+- Live payment-provider integration behind the existing simulator interface
+- Partial recovery as a first-class orchestrated outcome
+- Recovery-window enforcement against case age
+- Historical performance: which strategy actually recovers most, by segment
 
 ---
 
-## 5. Extensibility
+<div align="center">
 
-The layered design allows additional recovery strategies, policies, agents, APIs, and frontend capabilities to be added without requiring the entire application to be rewritten.
-
----
-
-# Why RecoverAI Is Different
-
-Many payment systems focus primarily on processing transactions and reporting failures.
-
-RecoverAI focuses on the **post-failure recovery lifecycle**.
-
-Instead of:
-
-```text
-Payment Failed
-      ↓
-End
-```
-
-RecoverAI follows:
-
-```text
-Payment Failed
-      ↓
-Identify Revenue Risk
-      ↓
-Create Recovery Case
-      ↓
-Assess Risk
-      ↓
-Determine Recovery Strategy
-      ↓
-Generate Bounded Action
-      ↓
-Execute
-      ↓
-Measure Result
-      ↓
-Record Audit Trail
-```
-
-The goal is to move from **payment failure detection** toward **structured revenue recovery**.
-
----
-
-# Current Scope
-
-The current implementation includes:
-
-- Recovery case management
-- Risk assessment
-- AI-assisted recovery decision logic
-- AI-assisted recovery action logic
-- Recovery decision policies
-- Recovery action execution service
-- Recovery outcome tracking
-- Recovered amount tracking
-- Audit-event functionality
-- Repository-based persistence
-- SQLAlchemy models
-- Alembic migrations
-- FastAPI APIs
-- React frontend
-- Unit tests
-- Integration tests
-
----
-
-# Future Enhancements
-
-Potential future improvements include:
-
-- Integration with live payment providers
-- More payment-failure reason classification
-- Additional recovery strategies
-- More advanced customer segmentation
-- Historical recovery-performance analysis
-- Recovery strategy optimization based on outcomes
-- Automated retry scheduling
-- Notification integrations
-- Analytics and recovery dashboards
-- More sophisticated AI evaluation
-- Human approval workflows for sensitive actions
-- Production-grade authentication and authorization
-- Observability, metrics, and monitoring
-- Deployment using containerized infrastructure
-
----
-
-# Limitations
-
-RecoverAI is currently a project implementation and prototype rather than a production payment-recovery system.
-
-In a production environment, additional concerns would need to be addressed, including:
-
-- Production payment-provider integrations
-- Authentication and authorization
-- Secure secret management
-- Rate limiting
-- Production database infrastructure
-- Distributed execution
-- Idempotency guarantees
-- Monitoring and observability
-- Compliance requirements
-- Production-grade notification providers
-- Advanced model evaluation and governance
-
-These are intentionally separated from the core project implementation so that the current system can demonstrate the complete recovery architecture and workflow.
-
----
-
-# Project Outcome
-
-RecoverAI demonstrates how an AI-assisted system can connect revenue-risk detection, decision making, controlled recovery actions, outcome measurement, and auditability into one structured workflow.
-
-The central idea is:
-
-> **Don't just identify failed payments. Build a controlled system that decides what to do next, executes the recovery workflow, measures the result, and keeps the process traceable.**
-
----
-
-# Buildathon Context
-
-**Track:** AI Revenue Recovery  
-**Platform:** Razorpay Buildathon  
-**Project:** RecoverAI
-
-RecoverAI was developed as a project exploring how agentic AI and structured backend architecture can be applied to revenue recovery.
-
-The implementation emphasizes:
-
-- AI-assisted decision making
-- Bounded recovery actions
-- End-to-end workflow orchestration
-- Measurable recovery outcomes
-- Auditability
-- Modular backend architecture
-- A usable frontend interface
-
----
-
-# Author
+### Built for the Razorpay Buildathon — Track 3
 
 **Lakkarsu Nanditha**
 
----
+*Don't just detect failed payments. Decide what to do, act within limits you
+cannot exceed, measure what came back, and keep the receipts.*
 
-## License
+<br />
 
-This project was developed as part of a hackathon/buildathon project and is intended for educational, demonstration, and prototype purposes.
+[![Dashboard](https://img.shields.io/badge/Live_Dashboard-635BFF?style=for-the-badge&logo=vercel&logoColor=white)](https://recover-ai-virid.vercel.app)
+[![API Docs](https://img.shields.io/badge/API_Docs-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://recoverai-3at6.onrender.com/docs)
+
+</div>
