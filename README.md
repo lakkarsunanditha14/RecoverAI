@@ -2,7 +2,13 @@
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=30&duration=3000&pause=800&color=635BFF&center=true&vCenter=true&width=680&lines=RecoverAI;A+bounded+revenue+recovery+agent;Detect+%E2%86%92+Decide+%E2%86%92+Authorise+%E2%86%92+Execute;It+knows+when+to+stop." alt="RecoverAI" />
 
-### A failed payment is not lost revenue. It is an unfinished decision.
+# RecoverAI
+
+### AI-Powered Closed-Loop Revenue Recovery and Intelligent Payment Intervention Engine
+
+<br />
+
+**A failed payment is not lost revenue. It is an unfinished decision.**
 
 RecoverAI turns failed payments into tracked recovery cases, decides what to do
 about each one, acts within limits it cannot exceed, and stops.
