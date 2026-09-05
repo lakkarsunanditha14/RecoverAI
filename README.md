@@ -26,6 +26,123 @@ The system combines backend services, domain models, AI-assisted agents, recover
 
 ---
 
+## The Recovery Agent
+
+RecoverAI is an AI-assisted revenue recovery **agent**: it takes a
+payment that failed, decides what to do about it, does it within
+explicit limits, checks whether it worked, and stops.
+
+### The loop
+
+```text
+DETECT        a payment at risk becomes a recovery case
+   ↓
+ASSESS        risk and recoverability are scored from the payment
+   ↓          and its attempt history
+DECIDE        the agent recommends one of five recovery strategies
+   ↓
+POLICY CHECK  the policy authorises, refuses, or escalates
+   ↓          — this is binding, not advisory
+EXECUTE       the authorised action runs, up to 3 attempts
+   ↓
+VERIFY        the payment result is checked after each attempt
+   ↓
+RECOVER       stop on success, or escalate to a human on exhaustion
+or ESCALATE
+   ↓
+AUDIT         every step above is written to an immutable trail
+```
+
+Run it for one case with `POST /recovery-cases/{case_id}/run`, or across
+the open portfolio with `POST /recovery-batch/run`.
+
+### Bounded automation
+
+The agent recommends; the policy decides. A recommendation cannot reach
+execution unless `RecoveryDecisionPolicy.authorize()` returns it as
+authorised, so the decision layer has no path around the guardrails.
+
+| Guardrail | Limit | Behaviour |
+|---|---|---|
+| Max retries | 3 | Stops and escalates on exhaustion |
+| Recovery window | 7 days | Configurable bound on the recovery period |
+| High risk | score ≥ 70 | Escalates to a human, executes nothing |
+| High value | ≥ ₹50,000 | Requires policy review before automation |
+| Already recovered | — | Stops; never retries a paid payment |
+| Closed case | — | Skipped; duplicate execution is blocked |
+
+The live values are served by `GET /recovery-policy` and rendered
+directly in the interface, so the displayed limits cannot drift from the
+enforced ones.
+
+### Recovery strategies
+
+The decision layer selects between `retry_payment`, `send_reminder`,
+`update_payment_method`, `offer_alternative_method` and `escalate` based
+on the assessed recoverability — a high-recoverability case is retried,
+a moderate one is prompted, a weak one has its payment method
+questioned, and a high-risk one goes to a human.
+
+### Human escalation
+
+Two distinct paths end with a human, and the audit trail distinguishes
+them:
+
+- **`high_risk_case`** — refused before execution, `0` attempts used
+- **`maximum_retry_limit_reached`** — executed and exhausted, `3` attempts used
+
+### Measured recovery
+
+`POST /recovery-batch/run` processes open cases and returns totals that
+are **re-read from the database after the run**, never accumulated by
+the endpoint. Recovered revenue is summed from recovery outcomes, so a
+partial recovery contributes the amount that actually came back rather
+than the full amount at risk.
+
+### Audit trail
+
+Every stage writes an event: `risk_assessed`, `decision_generated`,
+`policy_checked`, `action_authorized`, `action_executed`,
+`payment_verified`, `retry_attempted`, `retry_limit_reached`,
+`outcome_recorded`, `recovery_completed`, `case_stopped`,
+`case_escalated`. Each carries a database timestamp, the acting service,
+and the case it belongs to.
+
+### Test simulation — important
+
+**Recovery execution is simulated. No payment provider is contacted and
+no real money moves.** `app/simulator/payment_simulator.py` derives each
+attempt's result deterministically from the payment id, the attempt
+number and the assessed recoverability, so a demonstration replays
+identically. Every simulated result is labelled `test_simulation` in the
+API response, the audit reason, and the interface.
+
+The recovery *engine* — assessment, decision, policy, execution
+lifecycle, outcome recording and audit — is real application code
+operating on real database records. Only the payment provider is
+simulated.
+
+There is **no LLM in this system.** The decision layer is deterministic
+policy code, which is what makes its behaviour testable and its refusals
+explainable.
+
+### Trying it
+
+```bash
+python -m app.simulator.seed
+python -m app.simulator.reset_cases
+```
+
+| Scenario | Payment | Expected |
+|---|---|---|
+| Recovers first attempt | `pay_2004` | `payment_recovered`, 1 attempt |
+| Exhausts retries | `pay_2014` | `maximum_retry_limit_reached`, 3 attempts, escalated |
+| Refused by policy | `pay_2011` | `high_risk_case`, **0 attempts**, escalated |
+| High value review | `pay_2020` | `high_value_requires_policy_review`, 0 attempts |
+
+```bash
+python -m pytest -q
+```
 ## Problem Statement
 
 Revenue leakage can occur when payments fail or remain unresolved.

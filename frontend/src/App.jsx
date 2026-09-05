@@ -17,6 +17,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   approveRecoveryAction,
   recordRecoveryOutcome,
+  runRecoveryAgent,
+  runRecoveryBatch,
   startRecoveryAction,
   completeRecoveryAction,
   checkHealth,
@@ -26,6 +28,7 @@ import {
   createRiskAssessment,
   getRecoveryCase,
   getRecoveryCases,
+  getRecoveryPolicy,
   getAuditEvents,
   getRecentAuditEvents,
   getRecoveryOutcomes,
@@ -101,8 +104,8 @@ function buildSummary(cases) {
     assessedCount: assessed.length,
     recoverability: assessed.length
       ? Math.round(
-          sum(assessed, (item) => item.recoverability_score) / assessed.length
-        )
+        sum(assessed, (item) => item.recoverability_score) / assessed.length
+      )
       : null,
     atRisk,
     recovered,
@@ -195,6 +198,11 @@ const EVENT_LABELS = {
   recovery_completed: { title: "Recovery completed", icon: CheckCircle2 },
   case_escalated: { title: "Case escalated", icon: AlertTriangle },
   case_stopped: { title: "Case stopped", icon: X },
+  decision_generated: { title: "AI decision generated", icon: Sparkles },
+  action_authorized: { title: "Action authorized by policy", icon: ShieldCheck },
+  payment_verified: { title: "Payment verified", icon: CheckCircle2 },
+  retry_attempted: { title: "Retry attempted", icon: RefreshCw },
+  retry_limit_reached: { title: "Retry limit reached", icon: AlertTriangle },
 };
 
 function relativeTime(isoString) {
@@ -215,6 +223,24 @@ function relativeTime(isoString) {
 
   const days = Math.round(hours / 24);
   return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
+function formatTimestamp(isoString) {
+  // The value comes from the database; this only formats it. Same UTC
+  // correction as relativeTime, since the backend stores naive UTC and
+  // JavaScript would otherwise read it as local time.
+  const at = new Date(
+    isoString.endsWith("Z") ? isoString : `${isoString}Z`
+  );
+
+  return at.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 }
 
 function App() {
@@ -245,6 +271,16 @@ function App() {
   const [outcomeError, setOutcomeError] = useState("");
   const [amountRecovered, setAmountRecovered] = useState("");
 
+  const [agentRunning, setAgentRunning] = useState(false);
+  const [agentResult, setAgentResult] = useState(null);
+  const [agentError, setAgentError] = useState("");
+
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(null);
+  const [batchResult, setBatchResult] = useState(null);
+
+  const [policy, setPolicy] = useState(null);
+
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState("");
@@ -271,6 +307,12 @@ function App() {
     checkHealth()
       .then(() => setBackendOnline(true))
       .catch(() => setBackendOnline(false));
+  }, []);
+
+  useEffect(() => {
+    getRecoveryPolicy()
+      .then(setPolicy)
+      .catch(() => setPolicy(null));
   }, []);
 
   // Without this the Recovery Outcomes view only ever showed an outcome
@@ -355,6 +397,63 @@ function App() {
     setAiDecision(null);
     setRecoveryAction(null);
     setRecoveryOutcome(null);
+  };
+
+  const handleRunAgent = async () => {
+    if (!recoveryCase) {
+      setAgentError("Select a recovery case first.");
+      return;
+    }
+
+    setAgentRunning(true);
+    setAgentError("");
+
+    try {
+      const result = await runRecoveryAgent(recoveryCase.case_id);
+      setAgentResult(result);
+
+      // The run changes case status and recovered amounts, so the
+      // dashboard is re-read rather than patched from the response.
+      const cases = await getRecoveryCases();
+      setRecoveryCases(cases);
+      setRecoveryCase(
+        cases.find((item) => item.case_id === recoveryCase.case_id) ?? null
+      );
+    } catch (error) {
+      setAgentError(error.message);
+    } finally {
+      setAgentRunning(false);
+    }
+  };
+
+  const handleRunBatch = async () => {
+    setBatchRunning(true);
+    setBatchProgress({ processed: 0, remaining: null });
+
+    try {
+      let processed = 0;
+
+      // Each request handles a few cases so none of them runs past the
+      // host's request timeout; loop until the backend reports nothing
+      // left to do.
+      for (let round = 0; round < 40; round += 1) {
+        const result = await runRecoveryBatch(3);
+        processed += result.cases_processed;
+
+        setBatchProgress({ processed, remaining: result.cases_remaining });
+        setBatchResult(result);
+
+        if (result.cases_remaining === 0 || result.cases_processed === 0) {
+          break;
+        }
+      }
+
+      setRecoveryCases(await getRecoveryCases());
+    } catch (error) {
+      setAgentError(error.message);
+    } finally {
+      setBatchRunning(false);
+    }
   };
 
   const handleRiskAssessment = async () => {
@@ -839,17 +938,96 @@ function App() {
                   </p>
                 </div>
 
-                <button
-                  className="primary-button"
-                  onClick={() => {
-                    setNewCaseError("");
-                    setNewCaseOpen(true);
-                  }}
-                >
-                  New Recovery Case
-                </button>
+                <div className="heading-actions">
+                  <button
+                    className="primary-button"
+                    onClick={handleRunAgent}
+                    disabled={agentRunning || !recoveryCase}
+                  >
+                    <Zap size={17} />
+                    {agentRunning ? "Running agent…" : "Run Recovery Agent"}
+                  </button>
+
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      setNewCaseError("");
+                      setNewCaseOpen(true);
+                    }}
+                  >
+                    New Recovery Case
+                  </button>
+                </div>
               </section>
 
+              {agentError && (
+                <div className="error-message">{agentError}</div>
+              )}
+
+              {agentResult && (
+                <section className="panel agent-result">
+                  <div className="panel-header">
+                    <div>
+                      <p className="eyebrow">AGENT RUN</p>
+                      <h3>
+                        {agentResult.escalated
+                          ? "Escalated for human review"
+                          : agentResult.amount_recovered > 0
+                            ? "Recovered"
+                            : "Stopped"}
+                      </h3>
+                    </div>
+
+                    <span
+                      className={`case-status ${agentResult.escalated
+                        ? "danger"
+                        : agentResult.amount_recovered > 0
+                          ? "success"
+                          : "neutral"
+                        }`}
+                    >
+                      {agentResult.status}
+                    </span>
+                  </div>
+
+                  <dl className="agent-stats">
+                    <div>
+                      <dt>Policy decision</dt>
+                      <dd>{agentResult.policy_decision}</dd>
+                    </div>
+                    <div>
+                      <dt>Attempts used</dt>
+                      <dd>
+                        {agentResult.attempt_number} of{" "}
+                        {agentResult.max_attempts}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Risk / recoverability</dt>
+                      <dd>
+                        {agentResult.risk_score.toFixed(0)} /{" "}
+                        {agentResult.recoverability_score.toFixed(0)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Amount recovered</dt>
+                      <dd>{rupees(agentResult.amount_recovered)}</dd>
+                    </div>
+                    <div>
+                      <dt>Stop reason</dt>
+                      <dd>{agentResult.stop_reason || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Audit events written</dt>
+                      <dd>{agentResult.audit_event_ids.length}</dd>
+                    </div>
+                  </dl>
+
+                  <p className="simulation-note">
+                    Test Simulation — no payment provider is contacted.
+                  </p>
+                </section>
+              )}
               <section className="stats-grid">
                 <article className="stat-card">
                   <div className="stat-icon warning">
@@ -1450,31 +1628,55 @@ function App() {
                   </div>
                 ) : auditEvents.length > 0 ? (
                   <div className="audit-events">
-                    {auditEvents.map((event) => (
-                      <div className="audit-event" key={event.event_id}>
-                        <div className="audit-event-icon">
-                          <Clock3 size={17} />
-                        </div>
+                    {auditEvents.map((event, index) => {
+                      const label = EVENT_LABELS[event.event_type] ?? {
+                        title: event.event_type,
+                        icon: Clock3,
+                      };
+                      const Icon = label.icon;
 
-                        <div className="audit-event-content">
-                          <div className="audit-event-header">
-                            <strong>{event.event_type}</strong>
-                            <span>{event.occurred_at}</span>
+                      return (
+                        <div className="audit-event" key={event.event_id}>
+                          <div className="audit-event-icon">
+                            <Icon size={17} />
                           </div>
 
-                          <p>{event.reason}</p>
+                          <div className="audit-event-content">
+                            <div className="audit-event-header">
+                              <strong>
+                                <span className="audit-step">
+                                  {index + 1}
+                                </span>
+                                {label.title}
+                              </strong>
+                              <span title={event.occurred_at}>
+                                {formatTimestamp(event.occurred_at)}
+                              </span>
+                            </div>
 
-                          <div className="audit-event-meta">
-                            <span>
-                              <strong>Actor:</strong> {event.actor}
-                            </span>
-                            <span>
-                              <strong>Event ID:</strong> {event.event_id}
-                            </span>
+                            <p>{event.reason}</p>
+
+                            <div className="audit-event-meta">
+                              <span>
+                                <strong>Actor:</strong> {event.actor}
+                              </span>
+                              <span>
+                                <strong>Type:</strong>{" "}
+                                <code>{event.event_type}</code>
+                              </span>
+                              <span>
+                                <strong>Case:</strong>{" "}
+                                <code>
+                                  {event.case_id
+                                    .replace(/^case_/, "")
+                                    .slice(0, 8)}
+                                </code>
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="empty-state">
@@ -1501,12 +1703,25 @@ function App() {
                   </p>
                 </div>
 
-                <button
-                  className="primary-button"
-                  onClick={() => setActiveView("ai-decisions")}
-                >
-                  AI Recovery Overview
-                </button>
+                <div className="heading-actions">
+                  <button
+                    className="primary-button"
+                    onClick={handleRunBatch}
+                    disabled={batchRunning}
+                  >
+                    <Zap size={17} />
+                    {batchRunning
+                      ? `Running… ${batchProgress?.processed ?? 0} done`
+                      : "Run Recovery Batch"}
+                  </button>
+
+                  <button
+                    className="secondary-button"
+                    onClick={() => setActiveView("ai-decisions")}
+                  >
+                    AI Recovery Overview
+                  </button>
+                </div>
               </section>
 
               <section className="stats-grid">
@@ -1592,6 +1807,89 @@ function App() {
                     </ul>
                   </>
                 )}
+              </section>
+
+              <section className="agent-grid">
+                <article className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <p className="eyebrow">AI RECOVERY AGENT</p>
+                      <h3>Agent Activity</h3>
+                    </div>
+                    <span className="agent-state">
+                      <span className="status-dot" />
+                      {batchRunning ? "RUNNING" : "ACTIVE"}
+                    </span>
+                  </div>
+
+                  <dl className="agent-stats">
+                    <div>
+                      <dt>Cases processed</dt>
+                      <dd>{batchProgress?.processed ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Payments recovered</dt>
+                      <dd>{batchResult?.recovered_cases ?? summary.closedCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Cases escalated</dt>
+                      <dd>{batchResult?.escalated_cases ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Cases still open</dt>
+                      <dd>{batchResult?.cases_remaining ?? summary.openCount}</dd>
+                    </div>
+                  </dl>
+
+                  <p className="simulation-note">
+                    Test Simulation — no payment provider is contacted.
+                  </p>
+                </article>
+
+                <article className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <p className="eyebrow">BOUNDED AUTOMATION</p>
+                      <h3>Recovery Guardrails</h3>
+                    </div>
+                    <ShieldCheck size={19} />
+                  </div>
+
+                  <dl className="guardrails">
+                    <div>
+                      <dt>Max retries</dt>
+                      <dd>{policy?.max_retries ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>Recovery window</dt>
+                      <dd>
+                        {policy ? `${policy.recovery_window_days} days` : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Stop on success</dt>
+                      <dd>{policy?.stop_on_success ? "On" : "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>High risk</dt>
+                      <dd>
+                        {policy
+                          ? `Human review at ${policy.high_risk_threshold}`
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>High value</dt>
+                      <dd>
+                        {policy
+                          ? `Policy review at ${rupees(
+                            policy.high_value_threshold
+                          )}`
+                          : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
               </section>
 
               <section className="dashboard-grid">

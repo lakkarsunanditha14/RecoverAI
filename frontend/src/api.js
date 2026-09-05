@@ -107,3 +107,15 @@ export async function getAuditEvents(caseId) {
 export async function getRecentAuditEvents(limit = 6) {
   return apiRequest(`/audit-events?limit=${limit}`);
 }
+
+export async function runRecoveryAgent(caseId) {
+  return apiRequest(`/recovery-cases/${caseId}/run`, { method: "POST" });
+}
+
+export async function runRecoveryBatch(limit = 3) {
+  return apiRequest(`/recovery-batch/run?limit=${limit}`, { method: "POST" });
+}
+
+export async function getRecoveryPolicy() {
+  return apiRequest("/recovery-policy");
+}
