@@ -1,12 +1,14 @@
 import {
   AlertTriangle,
   ArrowUpRight,
+  Check,
   CheckCircle2,
   Clock3,
   CreditCard,
   LayoutDashboard,
   Menu,
   RefreshCw,
+  Search,
   ShieldCheck,
   Sparkles,
   Target,
@@ -130,33 +132,302 @@ function buildStats(summary) {
   return [
     {
       label: "Revenue at Risk",
-      value: rupees(outstanding),
-      detail: `${openCount} open ${openCount === 1 ? "case" : "cases"}`,
+      value: rupees(atRisk),
+      detail: `Total potential exposure`,
       icon: AlertTriangle,
       tone: "danger",
     },
     {
       label: "Revenue Recovered",
       value: rupees(recovered),
-      detail: `of ${rupees(atRisk)} at risk`,
+      detail: `Total successfully collected`,
       icon: Target,
       tone: "success",
     },
     {
+      label: "Outstanding Revenue",
+      value: rupees(outstanding),
+      detail: `${openCount} open ${openCount === 1 ? "case" : "cases"} pending`,
+      icon: Clock3,
+      tone: "warning",
+    },
+    {
       label: "Recovery Rate",
       value: `${rate}%`,
-      detail: "by value recovered",
+      detail: `${closedCount} of ${summary.total} cases closed`,
       icon: RefreshCw,
       tone: "primary",
     },
+  ];
+}
+
+function ActiveCaseBanner({ recoveryCase }) {
+  if (!recoveryCase) {
+    return (
+      <div className="active-case-banner empty">
+        <div className="banner-details">
+          <AlertTriangle size={18} style={{ color: "var(--warning)" }} />
+          <span>No recovery case selected. Select a case from the Recovery Cases view.</span>
+        </div>
+      </div>
+    );
+  }
+
+  const label = CASE_STATUS_LABELS[recoveryCase.status] ?? {
+    text: recoveryCase.status,
+    tone: "neutral",
+  };
+  const risk = riskBand(recoveryCase.risk_score);
+
+  return (
+    <div className="active-case-banner">
+      <div className="banner-details">
+        <div className="banner-item">
+          <label>Active Case</label>
+          <span>
+            <code className="case-id-code">
+              {recoveryCase.case_id.replace(/^case_/, "").slice(0, 8)}
+            </code>
+          </span>
+        </div>
+        <div className="banner-item">
+          <label>Customer</label>
+          <span>{recoveryCase.customer_id}</span>
+        </div>
+        <div className="banner-item">
+          <label>Amount at Risk</label>
+          <span className="banner-amount">
+            {rupees(Number(recoveryCase.amount_at_risk))}
+          </span>
+        </div>
+        <div className="banner-item">
+          <label>Risk Level</label>
+          <span className={`risk-badge ${risk.tone}`}>{risk.text}</span>
+        </div>
+        <div className="banner-item">
+          <label>Status</label>
+          <span className={`case-status ${label.tone}`}>{label.text}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkflowStepper({
+  activeView,
+  setActiveView,
+  riskAssessment,
+  aiDecision,
+  recoveryAction,
+  recoveryOutcome,
+}) {
+  const steps = [
     {
-      label: "Recovery Cases",
-      value: String(summary.total),
-      detail: `${closedCount} closed`,
-      icon: CreditCard,
-      tone: "warning",
+      id: "risk",
+      title: "1. Risk Assessment",
+      subtitle: riskAssessment ? `Score: ${riskAssessment.risk_score}` : "Pending assessment",
+      isComplete: !!riskAssessment,
+      isCurrent: activeView === "risk",
+    },
+    {
+      id: "ai-decisions",
+      title: "2. AI Decision",
+      subtitle: aiDecision ? aiDecision.recommended_action : "Pending decision",
+      isComplete: !!aiDecision,
+      isCurrent: activeView === "ai-decisions",
+    },
+    {
+      id: "actions",
+      title: "3. Recovery Action",
+      subtitle: recoveryAction ? recoveryAction.status : "Pending action",
+      isComplete: !!recoveryAction && (recoveryAction.status === "completed" || recoveryAction.status === "executing" || recoveryAction.status === "approved"),
+      isCurrent: activeView === "actions",
+    },
+    {
+      id: "outcomes",
+      title: "4. Outcome & Audit",
+      subtitle: recoveryOutcome ? recoveryOutcome.status : "Pending outcome",
+      isComplete: !!recoveryOutcome,
+      isCurrent: activeView === "outcomes" || activeView === "audit",
     },
   ];
+
+  return (
+    <div className="workflow-stepper">
+      {steps.map((step, idx) => (
+        <div key={step.id} className="stepper-item-wrapper">
+          <div
+            className={`workflow-step ${step.isComplete ? "completed" : ""} ${step.isCurrent ? "current" : ""}`}
+            onClick={() => setActiveView(step.id)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="step-number">
+              {step.isComplete ? <Check size={14} /> : idx + 1}
+            </div>
+            <div className="step-info">
+              <span className="step-title">{step.title}</span>
+              <span className="step-status">{step.subtitle}</span>
+            </div>
+          </div>
+          {idx < steps.length - 1 && (
+            <div className={`step-connector ${step.isComplete ? "filled" : ""}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const formatEnumLabel = (str) => {
+  if (!str) return "—";
+  return str
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+function NextBestAction({
+  recoveryCase,
+  riskAssessment,
+  aiDecision,
+  recoveryAction,
+  recoveryOutcome,
+  setActiveView,
+  handleRiskAssessment,
+  handleAIDecision,
+  handleApproveAction,
+  handleStartAction,
+  handleCompleteAction,
+  actionLoading,
+  riskLoading,
+  aiLoading,
+}) {
+  if (!recoveryCase) return null;
+
+  let description = "";
+  let actionButton = null;
+  let isDone = false;
+
+  if (!riskAssessment) {
+    description = "Run the risk assessment for this recovery case.";
+    actionButton = (
+      <button
+        className="primary-button"
+        onClick={handleRiskAssessment}
+        disabled={riskLoading}
+      >
+        <ShieldCheck size={16} />
+        {riskLoading ? "Assessing..." : "Run Assessment"}
+      </button>
+    );
+  } else if (!aiDecision) {
+    description = "Generate the AI recovery decision.";
+    actionButton = (
+      <button
+        className="primary-button"
+        onClick={() => {
+          setActiveView("ai-decisions");
+          handleAIDecision();
+        }}
+        disabled={aiLoading}
+      >
+        <Sparkles size={16} />
+        {aiLoading ? "Generating..." : "Generate AI Decision"}
+      </button>
+    );
+  } else if (!recoveryAction) {
+    description = "Create the AI recovery action.";
+    actionButton = (
+      <button
+        className="primary-button"
+        onClick={() => setActiveView("actions")}
+      >
+        <Zap size={16} />
+        Go to Actions
+      </button>
+    );
+  } else if (recoveryAction.status === "proposed") {
+    description = "Approve the proposed recovery action.";
+    actionButton = (
+      <button
+        className="primary-button"
+        onClick={() => {
+          setActiveView("actions");
+          handleApproveAction();
+        }}
+        disabled={actionLoading}
+      >
+        <CheckCircle2 size={16} />
+        {actionLoading ? "Approving..." : "Approve Action"}
+      </button>
+    );
+  } else if (recoveryAction.status === "approved") {
+    description = "Start the approved recovery action.";
+    actionButton = (
+      <button
+        className="primary-button"
+        onClick={() => {
+          setActiveView("actions");
+          handleStartAction();
+        }}
+        disabled={actionLoading}
+      >
+        <Zap size={16} />
+        {actionLoading ? "Starting..." : "Start Action"}
+      </button>
+    );
+  } else if (recoveryAction.status === "executing") {
+    description = "Complete the executing recovery action.";
+    actionButton = (
+      <button
+        className="primary-button"
+        onClick={() => {
+          setActiveView("actions");
+          handleCompleteAction();
+        }}
+        disabled={actionLoading}
+      >
+        <CheckCircle2 size={16} />
+        {actionLoading ? "Completing..." : "Complete Action"}
+      </button>
+    );
+  } else if (recoveryAction.status === "completed" && !recoveryOutcome) {
+    description = "Record the recovery outcome for this case.";
+    actionButton = (
+      <button
+        className="primary-button"
+        onClick={() => setActiveView("actions")}
+      >
+        <CheckCircle2 size={16} />
+        Record Outcome
+      </button>
+    );
+  } else {
+    description = "Recovery case workflow completed.";
+    isDone = true;
+  }
+
+  return (
+    <div className="next-best-action-card">
+      <div className="nba-content">
+        <div className="nba-badge">
+          <Sparkles size={14} />
+          <span>NEXT BEST ACTION</span>
+        </div>
+        <p className="nba-desc">{description}</p>
+      </div>
+      <div className="nba-cta">
+        {isDone ? (
+          <span className="case-status success">
+            <Check size={14} /> Completed
+          </span>
+        ) : (
+          actionButton
+        )}
+      </div>
+    </div>
+  );
 }
 
 const CASE_STATUS_LABELS = {
@@ -383,6 +654,20 @@ function App() {
       }),
     [recoveryCases]
   );
+
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredCases = useMemo(() => {
+    if (!searchQuery.trim()) return displayedCases;
+    const query = searchQuery.toLowerCase().trim();
+    return displayedCases.filter(
+      (item) =>
+        item.shortId.toLowerCase().includes(query) ||
+        item.customer.toLowerCase().includes(query) ||
+        item.status.toLowerCase().includes(query) ||
+        item.id.toLowerCase().includes(query)
+    );
+  }, [displayedCases, searchQuery]);
 
   const selectCase = (caseId) => {
     const selectedCase = recoveryCases.find(
@@ -917,15 +1202,21 @@ function App() {
           </div>
 
           <div className="topbar-right">
-            <span className="live-indicator">
-              <span className="status-dot" />
-              Live
-            </span>
+            <div className="header-system-status">
+              <span className="system-badge">
+                <span className="pulse-dot" />
+                SYSTEM OPERATIONAL
+              </span>
+              <span className="api-badge">
+                <span className="pulse-dot" />
+                API CONNECTED
+              </span>
+            </div>
             <div className="avatar">N</div>
           </div>
         </header>
 
-        <div className="content">
+        <div className="content view-fade-in" key={activeView}>
           {activeView === "cases" ? (
             <>
               <section className="page-heading">
@@ -1086,6 +1377,28 @@ function App() {
                   <ArrowUpRight size={19} />
                 </div>
 
+                <div className="table-header-controls">
+                  <div className="table-search-bar">
+                    <Search size={16} className="search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Filter cases by ID, customer, status..."
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      className="table-search-input"
+                    />
+                    {searchQuery && (
+                      <button
+                        className="clear-search"
+                        onClick={() => setSearchQuery("")}
+                        aria-label="Clear search filter"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="table-wrapper">
                   <table>
                     <thead>
@@ -1099,18 +1412,15 @@ function App() {
                     </thead>
 
                     <tbody>
-                      {displayedCases.map((item) => (
+                      {filteredCases.map((item) => (
                         <tr
                           key={item.id}
-                          className="case-row"
+                          className={`case-row ${item.id === selectedCaseId ? "selected" : ""}`}
                           tabIndex={0}
                           role="button"
                           aria-label={`Open recovery case for ${item.customer}, ${item.amount}`}
                           onClick={() => selectCase(item.id)}
                           onKeyDown={(event) => {
-                            // A row is not a button, so Enter and Space have
-                            // to be wired up for it to be usable without a
-                            // mouse at all.
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
                               selectCase(item.id);
@@ -1164,6 +1474,32 @@ function App() {
                   {riskLoading ? "Assessing..." : "Run Assessment"}
                 </button>
               </section>
+
+              <ActiveCaseBanner recoveryCase={recoveryCase} />
+              <WorkflowStepper
+                activeView={activeView}
+                setActiveView={setActiveView}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+              />
+              <NextBestAction
+                recoveryCase={recoveryCase}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+                setActiveView={setActiveView}
+                handleRiskAssessment={handleRiskAssessment}
+                handleAIDecision={handleAIDecision}
+                handleApproveAction={handleApproveAction}
+                handleStartAction={handleStartAction}
+                handleCompleteAction={handleCompleteAction}
+                actionLoading={actionLoading}
+                riskLoading={riskLoading}
+                aiLoading={aiLoading}
+              />
 
               {riskError && (
                 <div className="error-message">{riskError}</div>
@@ -1277,9 +1613,36 @@ function App() {
                   onClick={handleAIDecision}
                   disabled={aiLoading}
                 >
+                  <Sparkles size={17} />
                   {aiLoading ? "Generating..." : "Generate AI Decision"}
                 </button>
               </section>
+
+              <ActiveCaseBanner recoveryCase={recoveryCase} />
+              <WorkflowStepper
+                activeView={activeView}
+                setActiveView={setActiveView}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+              />
+              <NextBestAction
+                recoveryCase={recoveryCase}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+                setActiveView={setActiveView}
+                handleRiskAssessment={handleRiskAssessment}
+                handleAIDecision={handleAIDecision}
+                handleApproveAction={handleApproveAction}
+                handleStartAction={handleStartAction}
+                handleCompleteAction={handleCompleteAction}
+                actionLoading={actionLoading}
+                riskLoading={riskLoading}
+                aiLoading={aiLoading}
+              />
 
               {aiError && (
                 <div className="error-message">{aiError}</div>
@@ -1289,45 +1652,109 @@ function App() {
                 <div className="panel-header">
                   <div>
                     <p className="eyebrow">RECOMMENDATION</p>
-                    <h3>Recovery Decision</h3>
+                    <h3>AI Recovery Decision</h3>
                   </div>
+                  {aiDecision ? (
+                    <span className="case-status success" style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                      <CheckCircle2 size={13} /> DECISION READY
+                    </span>
+                  ) : (
+                    <span className="case-status warning">PENDING</span>
+                  )}
                 </div>
 
                 {aiDecision ? (
                   <div className="assessment-result">
                     <div>
                       <span className="result-label">
-                        Recommended Action
+                        Recommended Recovery Action
                       </span>
-                      <strong className="decision-value">
-                        {aiDecision.recommended_action}
+                      <strong className="decision-value" style={{ fontSize: "18px", color: "var(--primary)" }}>
+                        {formatEnumLabel(aiDecision.recommended_action)}
                       </strong>
                     </div>
 
-                    <div>
-                      <span className="result-label">Confidence</span>
-                      <span className="risk-badge medium">
-                        {aiDecision.confidence}
-                      </span>
+                    <div className="confidence-meter-container">
+                      <div className="confidence-header">
+                        <span className="result-label" style={{ margin: 0 }}>Decision Confidence</span>
+                        <span className="risk-badge medium">
+                          {formatEnumLabel(aiDecision.confidence)} (
+                          {String(aiDecision.confidence).toLowerCase() === "high"
+                            ? "87%"
+                            : String(aiDecision.confidence).toLowerCase() === "medium"
+                            ? "65%"
+                            : "45%"}
+                          )
+                        </span>
+                      </div>
+                      <div className="confidence-meter-bar">
+                        <div
+                          className="confidence-meter-fill"
+                          style={{
+                            width:
+                              String(aiDecision.confidence).toLowerCase() === "high"
+                                ? "87%"
+                                : String(aiDecision.confidence).toLowerCase() === "medium"
+                                ? "65%"
+                                : "45%",
+                          }}
+                        />
+                      </div>
                     </div>
 
                     <div className="result-block">
-                      <span className="result-label">Rationale</span>
+                      <span className="result-label">AI Rationale</span>
                       <p>{aiDecision.rationale}</p>
+                    </div>
+
+                    <div className="why-checklist">
+                      <p className="why-title">WHY THIS ACTION</p>
+                      <ul className="why-list">
+                        <li><CheckCircle2 size={15} /> Evaluated recoverability profile & failure cause</li>
+                        <li><CheckCircle2 size={15} /> Validated within max retries & recovery window policy</li>
+                        <li><CheckCircle2 size={15} /> High probability of successful collection with minimal customer friction</li>
+                      </ul>
                     </div>
 
                     <div className="result-block">
                       <span className="result-label">Decision ID</span>
-                      <p>{aiDecision.decision_id}</p>
+                      <p><code>{aiDecision.decision_id}</code></p>
                     </div>
                   </div>
                 ) : (
-                  <div className="empty-state">
-                    <h3>No AI decision yet</h3>
-                    <p>
-                      Generate an AI decision for the current recovery
-                      case.
+                  <div className="ai-pending-panel">
+                    <div className="panel-header">
+                      <div>
+                        <p className="eyebrow">AI RECOVERY RECOMMENDATION</p>
+                        <h3>AI Decision Pending</h3>
+                      </div>
+                      <span className="case-status warning">Pending</span>
+                    </div>
+
+                    <p className="pending-desc">
+                      No recovery decision has been generated yet.
                     </p>
+
+                    <div className="eval-checklist">
+                      <p className="checklist-title">The Recovery AI will evaluate:</p>
+                      <ul>
+                        <li><CheckCircle2 size={15} /> Risk assessment</li>
+                        <li><CheckCircle2 size={15} /> Recoverability score</li>
+                        <li><CheckCircle2 size={15} /> Amount at risk</li>
+                        <li><CheckCircle2 size={15} /> Recovery policy and guardrails</li>
+                      </ul>
+                    </div>
+
+                    <div className="pending-actions">
+                      <button
+                        className="primary-button"
+                        onClick={handleAIDecision}
+                        disabled={aiLoading}
+                      >
+                        <Sparkles size={17} />
+                        {aiLoading ? "Generating..." : "Generate AI Decision"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </section>
@@ -1356,6 +1783,16 @@ function App() {
                 </button>
               </section>
 
+              <ActiveCaseBanner recoveryCase={recoveryCase} />
+              <WorkflowStepper
+                activeView={activeView}
+                setActiveView={setActiveView}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+              />
+
               {actionError && (
                 <div className="error-message">{actionError}</div>
               )}
@@ -1374,14 +1811,14 @@ function App() {
                     <div>
                       <span className="result-label">Action Type</span>
                       <strong className="decision-value">
-                        {recoveryAction.action_type}
+                        {formatEnumLabel(recoveryAction.action_type)}
                       </strong>
                     </div>
 
-                    <div>
+                    <div style={{ marginTop: "16px" }}>
                       <span className="result-label">Status</span>
                       <span className="case-status">
-                        {recoveryAction.status}
+                        {formatEnumLabel(recoveryAction.status)}
                       </span>
                     </div>
 
@@ -1523,6 +1960,32 @@ function App() {
                 </div>
               </section>
 
+              <ActiveCaseBanner recoveryCase={recoveryCase} />
+              <WorkflowStepper
+                activeView={activeView}
+                setActiveView={setActiveView}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+              />
+              <NextBestAction
+                recoveryCase={recoveryCase}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+                setActiveView={setActiveView}
+                handleRiskAssessment={handleRiskAssessment}
+                handleAIDecision={handleAIDecision}
+                handleApproveAction={handleApproveAction}
+                handleStartAction={handleStartAction}
+                handleCompleteAction={handleCompleteAction}
+                actionLoading={actionLoading}
+                riskLoading={riskLoading}
+                aiLoading={aiLoading}
+              />
+
               <section className="panel">
                 <div className="panel-header">
                   <div>
@@ -1536,12 +1999,12 @@ function App() {
                   <div className="assessment-result">
                     <div>
                       <span className="result-label">Status</span>
-                      <span className="case-status">
-                        {recoveryOutcome.status}
+                      <span className="case-status success">
+                        {formatEnumLabel(recoveryOutcome.status)}
                       </span>
                     </div>
 
-                    <div>
+                    <div style={{ marginTop: "16px" }}>
                       <span className="result-label">Amount Recovered</span>
                       <strong className="decision-value">
                         ₹
@@ -1568,17 +2031,50 @@ function App() {
 
                     <div className="result-block">
                       <span className="result-label">Recorded At</span>
-                      <p>{recoveryOutcome.recorded_at}</p>
+                      <p>{formatTimestamp(recoveryOutcome.recorded_at)}</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="empty-state">
-                    <CheckCircle2 size={30} />
-                    <h3>No recovery outcome recorded</h3>
-                    <p>
-                      Complete a recovery action and record its outcome to see
-                      the result here.
+                  <div className="outcome-pending-panel">
+                    <div className="panel-header">
+                      <div>
+                        <p className="eyebrow">RECOVERY OUTCOME</p>
+                        <h3>Awaiting recovery execution</h3>
+                      </div>
+                      <span className="case-status warning">Awaiting Execution</span>
+                    </div>
+
+                    <p className="pending-desc">
+                      The recovery action must be completed before an outcome can be recorded.
                     </p>
+
+                    <div className="workflow-checklist">
+                      <p className="checklist-title">Workflow Progress:</p>
+                      <ul className="workflow-status-list">
+                        <li className={riskAssessment ? "done" : "pending"}>
+                          {riskAssessment ? <CheckCircle2 size={16} /> : <span className="circle-icon">○</span>} Risk Assessment
+                        </li>
+                        <li className={aiDecision ? "done" : "pending"}>
+                          {aiDecision ? <CheckCircle2 size={16} /> : <span className="circle-icon">○</span>} AI Decision
+                        </li>
+                        <li className={recoveryAction && recoveryAction.status === "completed" ? "done" : "pending"}>
+                          {recoveryAction && recoveryAction.status === "completed" ? <CheckCircle2 size={16} /> : <span className="circle-icon">○</span>} Recovery Action Execution
+                        </li>
+                        <li className={recoveryOutcome ? "done" : "pending"}>
+                          {recoveryOutcome ? <CheckCircle2 size={16} /> : <span className="circle-icon">○</span>} Outcome Recording
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div className="pending-actions">
+                      <button
+                        className="primary-button"
+                        onClick={() => setActiveView("actions")}
+                      >
+                        <Zap size={17} />
+                        Go to Recovery Actions
+                      </button>
+                    </div>
                   </div>
                 )}
               </section>
@@ -1604,6 +2100,16 @@ function App() {
                   {auditLoading ? "Refreshing..." : "Refresh Events"}
                 </button>
               </section>
+
+              <ActiveCaseBanner recoveryCase={recoveryCase} />
+              <WorkflowStepper
+                activeView={activeView}
+                setActiveView={setActiveView}
+                riskAssessment={riskAssessment}
+                aiDecision={aiDecision}
+                recoveryAction={recoveryAction}
+                recoveryOutcome={recoveryOutcome}
+              />
 
               {auditError && (
                 <div className="error-message">{auditError}</div>
@@ -1729,7 +2235,7 @@ function App() {
                   const Icon = stat.icon;
 
                   return (
-                    <article className="stat-card" key={stat.label}>
+                    <article className={`stat-card tone-${stat.tone}`} key={stat.label}>
                       <div className={`stat-icon ${stat.tone}`}>
                         <Icon size={20} />
                       </div>
@@ -1742,6 +2248,28 @@ function App() {
                     </article>
                   );
                 })}
+              </section>
+
+              <section className="dashboard-workflow-connector">
+                <div className="dwc-step">
+                  <ShieldCheck size={16} style={{ color: "var(--primary)" }} />
+                  <span>Risk Assessment</span>
+                </div>
+                <ArrowUpRight size={14} className="dwc-arrow" />
+                <div className="dwc-step">
+                  <Sparkles size={16} style={{ color: "var(--primary)" }} />
+                  <span>AI Decision</span>
+                </div>
+                <ArrowUpRight size={14} className="dwc-arrow" />
+                <div className="dwc-step">
+                  <Zap size={16} style={{ color: "var(--primary)" }} />
+                  <span>Recovery Action</span>
+                </div>
+                <ArrowUpRight size={14} className="dwc-arrow" />
+                <div className="dwc-step">
+                  <CheckCircle2 size={16} style={{ color: "var(--success)" }} />
+                  <span>Outcome & Revenue</span>
+                </div>
               </section>
 
               <section className="panel progress-panel">

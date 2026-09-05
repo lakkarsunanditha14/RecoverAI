@@ -2285,3 +2285,688 @@ tbody tr:hover {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* =========================================================
+   PHASE 1-6 CONTROL CENTER ENHANCEMENTS
+   ========================================================= */
+
+/* Active Case Banner */
+.active-case-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #111827 0%, #1e293b 100%);
+  color: #ffffff;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 18px;
+  box-shadow: 0 4px 16px rgba(17, 24, 39, 0.15);
+}
+
+.active-case-banner.empty {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  color: var(--text);
+}
+
+.banner-details {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.banner-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.banner-item label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.banner-item span {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.case-id-code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #60a5fa;
+}
+
+.banner-amount {
+  color: #34d399 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+
+/* Recovery Workflow Stepper */
+.workflow-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+
+.stepper-item-wrapper {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+  border: 1px solid transparent;
+  flex: 1;
+}
+
+.workflow-step:hover {
+  background: var(--surface-soft);
+}
+
+.workflow-step.current {
+  background: var(--primary-soft);
+  border-color: rgba(91, 83, 240, 0.3);
+}
+
+.step-number {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #475569;
+  flex-shrink: 0;
+  transition: all 150ms ease;
+}
+
+.workflow-step.completed .step-number {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.workflow-step.current .step-number {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(91, 83, 240, 0.2);
+}
+
+.step-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.step-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.step-status {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.step-connector {
+  width: 20px;
+  height: 2px;
+  background: var(--border);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+.step-connector.filled {
+  background: #10b981;
+}
+
+/* Table Search & Selected Row Highlight */
+.table-header-controls {
+  margin-bottom: 14px;
+}
+
+.table-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-width: 380px;
+}
+
+.search-icon {
+  color: var(--faint);
+  flex-shrink: 0;
+}
+
+.table-search-input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+}
+
+.clear-search {
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  padding: 2px;
+}
+
+.case-row.selected {
+  background: rgba(91, 83, 240, 0.08) !important;
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.case-row.selected td {
+  color: var(--text) !important;
+  font-weight: 600 !important;
+}
+
+/* Stat Cards Polish */
+.stat-card.tone-danger {
+  border-top: 3px solid var(--danger);
+}
+
+.stat-card.tone-success {
+  border-top: 3px solid var(--success);
+}
+
+.stat-card.tone-warning {
+  border-top: 3px solid var(--warning);
+}
+
+.stat-card.tone-primary {
+  border-top: 3px solid var(--primary);
+}
+
+/* Feedback & Banners */
+.success-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid rgba(15, 138, 99, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 900px) {
+  .workflow-stepper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .stepper-item-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .step-connector {
+    width: 2px;
+    height: 12px;
+    margin: 2px auto;
+  }
+}
+
+/* =========================================================
+   FINAL POLISH PASS STYLING
+   ========================================================= */
+
+/* Item 1: Label Display Hierarchy & Spacing */
+.result-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.decision-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.result-block {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.result-block p {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* Item 2: AI Decision Pending Panel */
+.ai-pending-panel {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pending-desc {
+  margin: 12px 0 20px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.eval-checklist {
+  margin: 18px 0 24px;
+  padding: 16px 20px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.checklist-title {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.eval-checklist ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.eval-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.eval-checklist li svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* Item 3: Outcome Pending Panel & Workflow Checklist */
+.outcome-pending-panel {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.workflow-checklist {
+  margin: 18px 0 24px;
+  padding: 16px 20px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.workflow-status-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.workflow-status-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.workflow-status-list li.done {
+  color: var(--success);
+}
+
+.workflow-status-list li.pending {
+  color: var(--muted);
+}
+
+.circle-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Item 5: Next Best Action Card */
+.next-best-action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(91, 83, 240, 0.06), rgba(91, 83, 240, 0.02));
+  border: 1px solid rgba(91, 83, 240, 0.2);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(91, 83, 240, 0.04);
+}
+
+.nba-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nba-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.nba-desc {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.nba-cta {
+  flex-shrink: 0;
+}
+
+/* Dashboard Workflow Connectors */
+.dashboard-workflow-connector {
+  margin: 18px 0;
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dwc-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.dwc-arrow {
+  color: var(--faint);
+}
+
+/* =========================================================
+   PREMIUM PRODUCTION UI / MOTION PASS
+   ========================================================= */
+
+/* 1. Motion System & View Transitions */
+.view-fade-in {
+  animation: fadeSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseDot {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Modal animation */
+.modal {
+  animation: modalSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Smooth micro-interactions for cards and buttons */
+.stat-card, .panel, .action-card, .next-best-action-card, .active-case-banner {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+button {
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* 2. Topbar Live System Indicators */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-system-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.system-badge, .api-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(15, 138, 99, 0.08);
+  color: var(--success);
+  border: 1px solid rgba(15, 138, 99, 0.2);
+}
+
+.api-badge {
+  background: rgba(91, 83, 240, 0.08);
+  color: var(--primary);
+  border-color: rgba(91, 83, 240, 0.2);
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+/* 3. AI Decision Experience Enhancements */
+.confidence-meter-container {
+  margin: 16px 0;
+}
+
+.confidence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.confidence-meter-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--surface-soft);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.confidence-meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #8b5cf6);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.why-checklist {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.why-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.why-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.why-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.why-list li svg {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+/* 4. Skeleton Loaders */
+.skeleton-box {
+  background: linear-gradient(90deg, var(--surface-soft) 25%, var(--border) 50%, var(--surface-soft) 75%);
+  background-size: 400% 100%;
+  animation: skeletonShimmer 1.5s infinite ease-in-out;
+  border-radius: 4px;
+}
+
+.skeleton-line {
+  height: 14px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.skeleton-line.short {
+  width: 60%;
+}
+
+/* 5. Accessibility Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
