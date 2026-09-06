@@ -2970,3 +2970,27 @@ button:active:not(:disabled) {
     scroll-behavior: auto !important;
   }
 }
+/* The diagnosed cause, shown above the lifecycle rows so the panel
+   reads cause first and consequence after. */
+.lifecycle-diagnosis {
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.lifecycle-diagnosis strong {
+  text-transform: capitalize;
+}
+
+.lifecycle-diagnosis .confidence {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--primary);
+}

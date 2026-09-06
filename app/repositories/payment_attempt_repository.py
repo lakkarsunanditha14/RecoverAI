@@ -25,6 +25,7 @@ class PaymentAttemptRepository:
             amount=model.amount,
             status=model.status,
             created_at=model.created_at,
+            failure_reason=model.failure_reason,
         )
 
     def get_by_payment_id(self, payment_id: str) -> list[PaymentAttempt]:
@@ -43,6 +44,7 @@ class PaymentAttemptRepository:
                 amount=model.amount,
                 status=model.status,
                 created_at=model.created_at,
+                failure_reason=model.failure_reason,
             )
             for model in models
         ]
@@ -68,4 +70,5 @@ class PaymentAttemptRepository:
             amount=model.amount,
             status=model.status,
             created_at=model.created_at,
+            failure_reason=model.failure_reason,
         )

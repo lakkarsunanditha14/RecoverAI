@@ -14,6 +14,7 @@ from app.policies.recovery_decision_policy import (
 from app.repositories.recovery_action_repository import RecoveryActionRepository
 from app.repositories.recovery_case_repository import RecoveryCaseRepository
 from app.services.audit_event_service import AuditEventService
+from app.services.payment_diagnosis_service import PaymentDiagnosisService
 from app.services.recovery_action_execution_service import (
     RecoveryActionExecutionService,
 )
@@ -28,6 +29,10 @@ from app.simulator.payment_simulator import verify_payment
 class OrchestrationResult:
     case_id: str
     status: str
+    diagnosis_category: str = ""
+    diagnosis_confidence: str = ""
+    diagnosis_rationale: str = ""
+    retry_viable: bool = True
     risk_score: float = 0.0
     recoverability_score: float = 0.0
     recommended_action: str = ""
@@ -63,6 +68,7 @@ class RecoveryOrchestratorService:
         self.execution_service = RecoveryActionExecutionService(db)
         self.outcome_service = RecoveryOutcomeService(db)
         self.audit_service = AuditEventService(db)
+        self.diagnosis_service = PaymentDiagnosisService(db)
         self.policy = RecoveryDecisionPolicy()
 
     def run(self, case_id: str) -> OrchestrationResult:
@@ -88,6 +94,24 @@ class RecoveryOrchestratorService:
             result.stop_reason = "case_already_closed"
             result.policy_decision = "stop"
             return result
+
+        # Diagnose before scoring: the cause of the failure is what makes
+        # the strategy specific, and the score alone cannot tell an
+        # expired card apart from a bank timeout.
+        diagnosis = self.diagnosis_service.diagnose(case.case_id)
+        result.diagnosis_category = str(diagnosis.category)
+        result.diagnosis_confidence = diagnosis.confidence
+        result.diagnosis_rationale = diagnosis.rationale
+        result.retry_viable = diagnosis.retry_viable
+
+        self._audit(
+            result,
+            case.case_id,
+            AuditEventType.FAILURE_DIAGNOSED,
+            "payment_diagnosis_service",
+            f"{diagnosis.category} ({diagnosis.confidence}): "
+            f"{diagnosis.rationale}",
+        )
 
         assessment = self.risk_service.assess(case.case_id)
         result.risk_score = float(assessment.risk_score)
@@ -116,6 +140,7 @@ class RecoveryOrchestratorService:
             amount_at_risk=case.amount_at_risk,
             retry_count=retry_count,
             payment_already_recovered=False,
+            diagnosis=diagnosis,
         )
 
         result.policy_decision = policy_result.action

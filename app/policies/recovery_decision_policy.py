@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from app.domain.diagnosis import Diagnosis, FailureCategory
+
 # Guardrails. These are the authorisation boundary: the agent recommends,
 # this policy decides, and nothing downstream may override it.
 MAX_RETRIES = 3
@@ -43,6 +45,7 @@ class RecoveryDecisionPolicy:
         risk_score: float,
         recoverability_score: float,
         amount_at_risk: float,
+        diagnosis: Diagnosis | None = None,
     ) -> RecoveryDecisionRecommendation:
         # Strategy selection by recoverability, so cases do not all
         # collapse onto retry_payment.
@@ -56,6 +59,16 @@ class RecoveryDecisionPolicy:
                     f"human review is recommended."
                 ),
             )
+
+        # The diagnosis answers a question recoverability cannot: what
+        # actually went wrong. Charging an expired card a second time
+        # fails for the same reason it failed the first time, however
+        # recoverable the case looks on score alone.
+        if diagnosis is not None:
+            matched = self._strategy_for(diagnosis, amount_at_risk)
+
+            if matched is not None:
+                return matched
 
         if recoverability_score >= 80:
             return RecoveryDecisionRecommendation(
@@ -89,6 +102,45 @@ class RecoveryDecisionPolicy:
             ),
         )
 
+    @staticmethod
+    def _strategy_for(
+        diagnosis: Diagnosis,
+        amount_at_risk: float,
+    ) -> RecoveryDecisionRecommendation | None:
+        """
+        Map a diagnosed cause onto the action that addresses it.
+
+        Returns None when the diagnosis carries no strategy signal, so
+        selection falls back to the recoverability bands.
+        """
+        by_category = {
+            FailureCategory.CARD_EXPIRED: "update_payment_method",
+            FailureCategory.PAYMENT_METHOD_INVALID: "update_payment_method",
+            FailureCategory.INSUFFICIENT_FUNDS: "send_reminder",
+            FailureCategory.BANK_TIMEOUT: "retry_payment",
+            FailureCategory.PERSISTENT_DECLINE: "offer_alternative_method",
+            FailureCategory.GATEWAY_UNCERTAIN: "escalate",
+        }
+
+        action = by_category.get(diagnosis.category)
+
+        if action is None:
+            return None
+
+        # A cause that cannot clear on a retry must not be retried, even
+        # where the score would otherwise allow it.
+        if action == "retry_payment" and not diagnosis.retry_viable:
+            action = "offer_alternative_method"
+
+        return RecoveryDecisionRecommendation(
+            recommended_action=action,
+            confidence=diagnosis.confidence,
+            rationale=(
+                f"Diagnosed as {diagnosis.category} on "
+                f"{amount_at_risk:.2f}: {diagnosis.rationale}"
+            ),
+        )
+
     def authorize(
         self,
         recommended_action: str,
@@ -97,6 +149,7 @@ class RecoveryDecisionPolicy:
         amount_at_risk: Decimal,
         retry_count: int,
         payment_already_recovered: bool,
+        diagnosis: Diagnosis | None = None,
     ) -> PolicyDecision:
         factors = [
             f"risk_score={risk_score:.0f}",
@@ -105,6 +158,9 @@ class RecoveryDecisionPolicy:
             f"amount_at_risk={amount_at_risk:.2f}",
             f"recommended={recommended_action}",
         ]
+
+        if diagnosis is not None:
+            factors.append(f"diagnosis={diagnosis.category}")
 
         if payment_already_recovered:
             return PolicyDecision(
@@ -146,6 +202,28 @@ class RecoveryDecisionPolicy:
                 requires_review=True,
                 factors=factors,
             )
+
+        # Where the cause is known, it decides the strategy. The policy
+        # derives that strategy itself rather than trusting the action
+        # the agent asked for, so this stays the authorisation boundary
+        # while still acting on the diagnosis.
+        if diagnosis is not None:
+            directed = self._strategy_for(diagnosis, float(amount_at_risk))
+
+            if directed is not None:
+                action = directed.recommended_action
+                escalating = action == "escalate"
+
+                return PolicyDecision(
+                    action=action,
+                    authorized=not escalating,
+                    escalate=escalating,
+                    stop=escalating,
+                    reason=f"diagnosis_{diagnosis.category}",
+                    factors=factors + [
+                        f"retry_viable={diagnosis.retry_viable}"
+                    ],
+                )
 
         if recoverability_score >= 80 and retry_count == 0:
             return PolicyDecision(

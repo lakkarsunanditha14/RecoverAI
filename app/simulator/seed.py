@@ -36,6 +36,30 @@ _THREE_FAILED = [AttemptStatus.FAILED,
 _METHOD_ISSUE = [AttemptStatus.FAILED,
                  AttemptStatus.FAILED, AttemptStatus.UNKNOWN]
 
+# The reason the provider gave, per payment. This is what the
+# diagnosis service classifies; without it every case looks the same
+# and the strategy collapses back onto the recoverability score.
+FAILURE_REASONS = {
+    "pay_2004": "bank_timeout",
+    "pay_2005": "issuer_unavailable",
+    "pay_2007": "bank_timeout",
+    "pay_2009": "network_error",
+    "pay_2010": "bank_timeout",
+    "pay_2001": "insufficient_funds",
+    "pay_2002": "insufficient_funds",
+    "pay_2003": "low_balance",
+    "pay_2018": "insufficient_funds",
+    "pay_2014": "insufficient_funds",
+    "pay_2016": "insufficient_funds",
+    "pay_2021": "low_balance",
+    "pay_2006": "card_expired",
+    "pay_2008": "card_expired",
+    "pay_2015": "invalid_card",
+    "pay_2019": "do_not_honour",
+    "pay_2020": "bank_timeout",
+    "pay_2022": "insufficient_funds",
+}
+
 PAYMENTS = [
     # Referenced by the integration tests; must stay low risk.
     ("pay_test_001", "cust_test_001", "4999.00",
@@ -111,6 +135,14 @@ def seed() -> int:
             )
 
             for number, status in enumerate(attempt_statuses, start=1):
+                # Only a failed attempt carries a reason; a pending or
+                # successful one has nothing to explain.
+                reason = (
+                    FAILURE_REASONS.get(payment_id)
+                    if status == AttemptStatus.FAILED
+                    else None
+                )
+
                 db.merge(
                     PaymentAttemptModel(
                         attempt_id=f"attempt_{payment_id}_{number}",
@@ -118,6 +150,7 @@ def seed() -> int:
                         attempt_number=number,
                         amount=Decimal(amount),
                         status=status,
+                        failure_reason=reason,
                         created_at=created_at + timedelta(minutes=number * 5),
                     )
                 )

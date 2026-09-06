@@ -20,3 +20,6 @@ class PaymentAttempt:
     amount: Decimal
     status: AttemptStatus
     created_at: datetime
+    # The provider's reason for the failure. None on success, and on
+    # attempts recorded before the column existed.
+    failure_reason: str | None = None

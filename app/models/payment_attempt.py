@@ -35,6 +35,13 @@ class PaymentAttemptModel(Base):
         nullable=False,
     )
 
+    # What the provider said. Nullable because a successful attempt has
+    # no failure reason, and attempts predating this column have none.
+    failure_reason: Mapped[str | None] = mapped_column(
+        String(60),
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,

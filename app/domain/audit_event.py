@@ -6,6 +6,7 @@ from enum import StrEnum
 class AuditEventType(StrEnum):
     PAYMENT_RECEIVED = "payment_received"
     PAYMENT_FAILED = "payment_failed"
+    FAILURE_DIAGNOSED = "failure_diagnosed"
     RISK_ASSESSED = "risk_assessed"
     DECISION_GENERATED = "decision_generated"
     ACTION_PROPOSED = "action_proposed"

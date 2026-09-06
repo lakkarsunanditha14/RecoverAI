@@ -119,3 +119,6 @@ export async function runRecoveryBatch(limit = 3) {
 export async function getRecoveryPolicy() {
   return apiRequest("/recovery-policy");
 }
+export async function getRecoveryMetrics() {
+  return apiRequest("/recovery-metrics");
+}

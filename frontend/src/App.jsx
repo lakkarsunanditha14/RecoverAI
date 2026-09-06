@@ -31,6 +31,7 @@ import {
   getRecoveryCase,
   getRecoveryCases,
   getRecoveryPolicy,
+  getRecoveryMetrics,
   getAuditEvents,
   getRecentAuditEvents,
   getRecoveryOutcomes,
@@ -125,35 +126,44 @@ function buildSummary(cases) {
   };
 }
 
-function buildStats(summary) {
-  const { atRisk, recovered, outstanding, openCount, closedCount, rate } =
-    summary;
+function buildStats(summary, metrics) {
+  const { atRisk, recovered, closedCount, rate } = summary;
+
+  // Track 3 asks for three distinct figures. Conflating them is how a
+  // recovery dashboard overstates itself: what is at stake, what the
+  // policy cleared for action, and what actually came back.
+  const totalAtRisk = metrics ? metrics.total_revenue_at_risk : atRisk;
+  const recoverable = metrics ? metrics.recoverable_revenue : null;
+  const totalRecovered = metrics ? metrics.revenue_recovered : recovered;
+  const recoveryRate = metrics ? metrics.recovery_rate : rate;
 
   return [
     {
       label: "Revenue at Risk",
-      value: rupees(atRisk),
-      detail: `Total potential exposure`,
+      value: rupees(totalAtRisk),
+      detail: `${summary.total} cases evaluated`,
       icon: AlertTriangle,
       tone: "danger",
     },
     {
-      label: "Revenue Recovered",
-      value: rupees(recovered),
-      detail: `Total successfully collected`,
+      label: "Recoverable Revenue",
+      value: recoverable === null ? "—" : rupees(recoverable),
+      detail: "Policy cleared for action",
+      icon: ShieldCheck,
+      tone: "warning",
+    },
+    {
+      label: "Actually Recovered",
+      value: rupees(totalRecovered),
+      detail: metrics
+        ? `${metrics.successful_recoveries} successful recoveries`
+        : "Collected from outcomes",
       icon: Target,
       tone: "success",
     },
     {
-      label: "Outstanding Revenue",
-      value: rupees(outstanding),
-      detail: `${openCount} open ${openCount === 1 ? "case" : "cases"} pending`,
-      icon: Clock3,
-      tone: "warning",
-    },
-    {
       label: "Recovery Rate",
-      value: `${rate}%`,
+      value: `${Math.round(recoveryRate)}%`,
       detail: `${closedCount} of ${summary.total} cases closed`,
       icon: RefreshCw,
       tone: "primary",
@@ -520,7 +530,7 @@ function App() {
 
   const [recoveryCases, setRecoveryCases] = useState([]);
   const summary = useMemo(() => buildSummary(recoveryCases), [recoveryCases]);
-  const stats = useMemo(() => buildStats(summary), [summary]);
+  const stats = useMemo(() => buildStats(summary, metrics), [summary, metrics]);
   const [recoveryCase, setRecoveryCase] = useState(null);
   const [caseLoading, setCaseLoading] = useState(true);
   const [caseError, setCaseError] = useState("");
@@ -548,9 +558,9 @@ function App() {
 
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
-  const [batchResult, setBatchResult] = useState(null);
 
   const [policy, setPolicy] = useState(null);
+  const [metrics, setMetrics] = useState(null);
 
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -584,6 +594,18 @@ function App() {
     getRecoveryPolicy()
       .then(setPolicy)
       .catch(() => setPolicy(null));
+  }, []);
+
+  // Portfolio figures come from the backend rather than being summed
+  // in the browser, so the dashboard cannot disagree with the batch.
+  const refreshMetrics = () =>
+    getRecoveryMetrics()
+      .then(setMetrics)
+      .catch(() => setMetrics(null));
+
+  useEffect(() => {
+    refreshMetrics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Without this the Recovery Outcomes view only ever showed an outcome
@@ -704,6 +726,7 @@ function App() {
       setRecoveryCase(
         cases.find((item) => item.case_id === recoveryCase.case_id) ?? null
       );
+      await refreshMetrics();
     } catch (error) {
       setAgentError(error.message);
     } finally {
@@ -726,7 +749,6 @@ function App() {
         processed += result.cases_processed;
 
         setBatchProgress({ processed, remaining: result.cases_remaining });
-        setBatchResult(result);
 
         if (result.cases_remaining === 0 || result.cases_processed === 0) {
           break;
@@ -734,6 +756,7 @@ function App() {
       }
 
       setRecoveryCases(await getRecoveryCases());
+      await refreshMetrics();
     } catch (error) {
       setAgentError(error.message);
     } finally {
@@ -1281,7 +1304,36 @@ function App() {
                     </span>
                   </div>
 
+                  {agentResult.diagnosis_category && (
+                    <p className="lifecycle-diagnosis">
+                      <strong>
+                        {agentResult.diagnosis_category.replace(/_/g, " ")}
+                      </strong>{" "}
+                      <span className="confidence">
+                        {agentResult.diagnosis_confidence} confidence
+                      </span>
+                      <br />
+                      {agentResult.diagnosis_rationale}
+                    </p>
+                  )}
+
                   <dl className="agent-stats">
+                    <div>
+                      <dt>Diagnosed cause</dt>
+                      <dd>
+                        {agentResult.diagnosis_category
+                          ? agentResult.diagnosis_category.replace(/_/g, " ")
+                          : "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Retry viable</dt>
+                      <dd>{agentResult.retry_viable ? "Yes" : "No"}</dd>
+                    </div>
+                    <div>
+                      <dt>Agent recommended</dt>
+                      <dd>{agentResult.recommended_action || "—"}</dd>
+                    </div>
                     <div>
                       <dt>Policy decision</dt>
                       <dd>{agentResult.policy_decision}</dd>
@@ -2352,20 +2404,28 @@ function App() {
 
                   <dl className="agent-stats">
                     <div>
-                      <dt>Cases processed</dt>
-                      <dd>{batchProgress?.processed ?? 0}</dd>
+                      <dt>Cases evaluated</dt>
+                      <dd>{metrics?.total_cases_evaluated ?? summary.total}</dd>
                     </div>
                     <div>
-                      <dt>Payments recovered</dt>
-                      <dd>{batchResult?.recovered_cases ?? summary.closedCount}</dd>
+                      <dt>Recovery attempts</dt>
+                      <dd>{metrics?.recovery_attempts ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Successful recoveries</dt>
+                      <dd>{metrics?.successful_recoveries ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Failed recoveries</dt>
+                      <dd>{metrics?.failed_recoveries ?? 0}</dd>
                     </div>
                     <div>
                       <dt>Cases escalated</dt>
-                      <dd>{batchResult?.escalated_cases ?? 0}</dd>
+                      <dd>{metrics?.escalated_cases ?? 0}</dd>
                     </div>
                     <div>
                       <dt>Cases still open</dt>
-                      <dd>{batchResult?.cases_remaining ?? summary.openCount}</dd>
+                      <dd>{metrics?.active_cases ?? summary.openCount}</dd>
                     </div>
                   </dl>
 

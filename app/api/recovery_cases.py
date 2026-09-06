@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.repositories.recovery_outcome_repository import RecoveryOutcomeRepository
 from app.repositories.risk_assessment_repository import RiskAssessmentRepository
+from app.services.payment_diagnosis_service import PaymentDiagnosisService
 from app.services.recovery_case_service import RecoveryCaseService
 
 
@@ -87,6 +88,11 @@ def get_recovery_case(
             detail=str(exc),
         )
 
+    # The diagnosis is derived from the payment's attempts, so it is
+    # available before the agent has ever run on this case. That lets the
+    # interface show why the revenue is at risk up front.
+    diagnosis = PaymentDiagnosisService(db).diagnose(case.case_id)
+
     return {
         "case_id": case.case_id,
         "payment_id": case.payment_id,
@@ -94,4 +100,11 @@ def get_recovery_case(
         "amount_at_risk": str(case.amount_at_risk),
         "status": case.status,
         "created_at": case.created_at,
+        "diagnosis": {
+            "category": str(diagnosis.category),
+            "confidence": diagnosis.confidence,
+            "rationale": diagnosis.rationale,
+            "retry_viable": diagnosis.retry_viable,
+            "signals": diagnosis.signals,
+        },
     }

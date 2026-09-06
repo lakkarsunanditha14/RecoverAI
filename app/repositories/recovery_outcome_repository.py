@@ -49,6 +49,18 @@ class RecoveryOutcomeRepository:
 
         return {case_id: total for case_id, total in totals}
 
+    def count_by_status(self) -> dict[str, int]:
+        rows = (
+            self.db.query(
+                RecoveryOutcomeModel.status,
+                func.count(RecoveryOutcomeModel.outcome_id),
+            )
+            .group_by(RecoveryOutcomeModel.status)
+            .all()
+        )
+
+        return {status: count for status, count in rows}
+
     def save(self, outcome: RecoveryOutcome) -> RecoveryOutcome:
         model = RecoveryOutcomeModel(
             outcome_id=outcome.outcome_id,

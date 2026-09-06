@@ -76,11 +76,15 @@ def test_audit_events_are_recorded_in_lifecycle_order():
     events = client.get(f"/recovery-cases/{case_id}/audit-events").json()
     types = [event["event_type"] for event in events]
 
-    assert types[0] == "risk_assessed"
+    # Diagnosis opens the trail: the cause is established before the case
+    # is scored, because the cause is what makes the strategy specific.
+    assert types[0] == "failure_diagnosed"
     assert types[-1] == "case_stopped"
 
-    # Assessment precedes the decision, which precedes authorisation,
-    # which precedes execution.
+    # Diagnosis precedes assessment, which precedes the decision, which
+    # precedes authorisation, which precedes execution.
+    assert types.index("failure_diagnosed") < types.index("risk_assessed")
+    assert types.index("risk_assessed") < types.index("decision_generated")
     assert types.index("decision_generated") < types.index("action_authorized")
     assert types.index("action_authorized") < types.index("action_executed")
     assert types.index("action_executed") < types.index("recovery_completed")

@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.domain.recovery_action import RecoveryAction
@@ -44,6 +45,27 @@ class RecoveryActionRepository:
             )
             for model in models
         ]
+
+    def case_ids_with_actions(self) -> set[str]:
+        # A case only has actions if the policy authorised one, so this
+        # is the record of what the agent judged worth attempting.
+        rows = self.db.query(RecoveryActionModel.case_id).distinct().all()
+
+        return {case_id for (case_id,) in rows}
+
+    def count_by_status(self) -> dict[str, int]:
+        # One row per status rather than loading every action, so the
+        # batch summary stays a fixed cost as the action count grows.
+        rows = (
+            self.db.query(
+                RecoveryActionModel.status,
+                func.count(RecoveryActionModel.action_id),
+            )
+            .group_by(RecoveryActionModel.status)
+            .all()
+        )
+
+        return {status: count for status, count in rows}
 
     def save(self, action: RecoveryAction) -> RecoveryAction:
         model = RecoveryActionModel(
