@@ -529,6 +529,10 @@ function App() {
   const [activeView, setActiveView] = useState("dashboard");
 
   const [recoveryCases, setRecoveryCases] = useState([]);
+  // Declared before the memo that reads it: a const referenced in a
+  // dependency array is evaluated during render, so declaring it
+  // further down the component crashes on the first paint.
+  const [metrics, setMetrics] = useState(null);
   const summary = useMemo(() => buildSummary(recoveryCases), [recoveryCases]);
   const stats = useMemo(() => buildStats(summary, metrics), [summary, metrics]);
   const [recoveryCase, setRecoveryCase] = useState(null);
@@ -560,7 +564,6 @@ function App() {
   const [batchProgress, setBatchProgress] = useState(null);
 
   const [policy, setPolicy] = useState(null);
-  const [metrics, setMetrics] = useState(null);
 
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
