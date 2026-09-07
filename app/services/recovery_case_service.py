@@ -21,6 +21,21 @@ class RecoveryCaseService:
         if payment is None:
             raise ValueError(f"Payment not found: {payment_id}")
 
+        # A payment has one open recovery case. Without this, every call
+        # mints another case for the same payment and the portfolio
+        # counts the same money once per copy.
+        existing = self.recovery_case_repository.list_all()
+
+        for case in existing:
+            if case.payment_id == payment_id and case.status not in {
+                RecoveryCaseStatus.RECOVERED,
+                RecoveryCaseStatus.PARTIALLY_RECOVERED,
+                RecoveryCaseStatus.FAILED,
+                RecoveryCaseStatus.STOPPED,
+                RecoveryCaseStatus.ESCALATED,
+            }:
+                return case
+
         case = RecoveryCase(
             case_id=f"case_{uuid4().hex}",
             payment_id=payment.payment_id,

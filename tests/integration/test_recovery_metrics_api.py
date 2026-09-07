@@ -77,7 +77,22 @@ def test_successful_recoveries_never_exceed_attempts():
     assert body["actions_executed"] <= body["recovery_attempts"]
 
 
-def test_recovery_rate_is_recovered_over_at_risk():
+def test_successful_recoveries_equals_recovered_cases():
+    body = metrics()
+
+    # Both count cases. If these ever disagree, a case is being counted
+    # once per outcome row rather than once per case.
+    assert body["successful_recoveries"] == body["recovered_cases"]
+
+
+def test_recovered_revenue_never_exceeds_the_amount_at_risk():
+    body = metrics()
+
+    assert body["revenue_recovered"] <= body["total_revenue_at_risk"]
+    assert body["revenue_recovered"] <= body["recoverable_revenue"]
+
+
+def test_recovery_rate_is_revenue_based():
     body = metrics()
 
     if body["total_revenue_at_risk"]:
@@ -86,6 +101,35 @@ def test_recovery_rate_is_recovered_over_at_risk():
         )
 
         assert body["recovery_rate"] == expected
+
+
+def test_a_case_with_repeated_outcomes_is_counted_once():
+    from sqlalchemy import text
+
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text(
+                """
+                select count(*) from (
+                    select case_id from recovery_outcomes
+                    group by case_id having count(*) > 1
+                ) duplicated
+                """
+            )
+        ).scalar()
+        body = metrics()
+        outcome_rows = db.execute(
+            text("select count(*) from recovery_outcomes where status='recovered'")
+        ).scalar()
+    finally:
+        db.close()
+
+    if rows:
+        # Duplicates present, so the row count must exceed the case count.
+        assert body["successful_recoveries"] < outcome_rows
 
 
 def test_case_detail_exposes_the_diagnosis():

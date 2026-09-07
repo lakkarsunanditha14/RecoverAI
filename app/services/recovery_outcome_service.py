@@ -54,6 +54,18 @@ class RecoveryOutcomeService:
                 f"Recovery action {action_id} does not belong to case {case_id}"
             )
 
+        terminal_statuses = {
+            RecoveryCaseStatus.RECOVERED,
+            RecoveryCaseStatus.PARTIALLY_RECOVERED,
+            RecoveryCaseStatus.FAILED,
+            RecoveryCaseStatus.STOPPED,
+        }
+        if case.status in terminal_statuses:
+            raise ValueError(
+                f"Recovery case {case_id} already concluded as "
+                f"{case.status}; its outcome cannot be recorded again."
+            )
+
         outcome = RecoveryOutcome(
             outcome_id=f"outcome_{uuid4().hex}",
             case_id=case.case_id,

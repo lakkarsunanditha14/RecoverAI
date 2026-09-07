@@ -122,3 +122,10 @@ export async function getRecoveryPolicy() {
 export async function getRecoveryMetrics() {
   return apiRequest("/recovery-metrics");
 }
+
+export async function sendRazorpayWebhook(payload) {
+  return apiRequest("/webhooks/razorpay", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

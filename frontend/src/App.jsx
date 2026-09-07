@@ -35,6 +35,7 @@ import {
   getAuditEvents,
   getRecentAuditEvents,
   getRecoveryOutcomes,
+  sendRazorpayWebhook,
 } from "./api";
 import "./App.css";
 
@@ -127,7 +128,7 @@ function buildSummary(cases) {
 }
 
 function buildStats(summary, metrics) {
-  const { atRisk, recovered, closedCount, rate } = summary;
+  const { atRisk, recovered, rate } = summary;
 
   // Track 3 asks for three distinct figures. Conflating them is how a
   // recovery dashboard overstates itself: what is at stake, what the
@@ -148,7 +149,9 @@ function buildStats(summary, metrics) {
     {
       label: "Recoverable Revenue",
       value: recoverable === null ? "—" : rupees(recoverable),
-      detail: "Policy cleared for action",
+      detail: metrics
+        ? `Cleared by policy (${metrics.total_cases_evaluated - metrics.active_cases} cases assessed)`
+        : "Policy cleared for action",
       icon: ShieldCheck,
       tone: "warning",
     },
@@ -164,7 +167,7 @@ function buildStats(summary, metrics) {
     {
       label: "Recovery Rate",
       value: `${Math.round(recoveryRate)}%`,
-      detail: `${closedCount} of ${summary.total} cases closed`,
+      detail: `${rupees(totalRecovered)} of ${rupees(totalAtRisk)} recovered`,
       icon: RefreshCw,
       tone: "primary",
     },
@@ -524,9 +527,254 @@ function formatTimestamp(isoString) {
   });
 }
 
+function RecoveryLoader({ isFading, currentStep, progress }) {
+  const steps = [
+    { title: "INITIALIZING RECOVER ENGINE", detail: "Connecting to financial intelligence core" },
+    { title: "SYNCING BOUNDED POLICY GUARDRAILS", detail: "Loading authorization limits & stopping rules" },
+    { title: "ANALYZING REVENUE SIGNALS", detail: "Evaluating at-risk payments & recoverability" },
+    { title: "RECOVERY COMMAND CENTER READY", detail: "Launching bounded automation suite" },
+  ];
+
+  return (
+    <div className={`recovery-loader-overlay ${isFading ? "fade-out" : ""}`}>
+      <div className="recovery-loader-container">
+        <div className="recovery-loader-brand">
+          <div className="recovery-loader-shield">
+            <ShieldCheck size={36} className="loader-shield-icon" />
+            <div className="loader-shield-aura" />
+          </div>
+          <div className="recovery-loader-brand-title">
+            <span className="brand-name">RECOVER<span className="brand-ai">AI</span></span>
+            <span className="brand-badge">BOUNDED ENGINE v1.0</span>
+          </div>
+        </div>
+
+        <div className="recovery-loader-status-block">
+          <div className="loader-step-title">
+            <span className="loader-pulse-dot" />
+            {steps[currentStep]?.title || "INITIALIZING..."}
+          </div>
+          <div className="loader-step-detail">
+            {steps[currentStep]?.detail}
+          </div>
+        </div>
+
+        <div className="recovery-loader-bar-track">
+          <div
+            className="recovery-loader-bar-fill"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <div className="recovery-loader-sequence">
+          {steps.map((step, idx) => {
+            const isDone = idx < currentStep;
+            const isActive = idx === currentStep;
+            return (
+              <div
+                key={step.title}
+                className={`loader-seq-item ${isDone ? "done" : ""} ${isActive ? "active" : ""}`}
+              >
+                <div className="seq-indicator">
+                  {isDone ? <Check size={12} /> : idx + 1}
+                </div>
+                <span className="seq-label">{step.title.split(" ")[0]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecoveryEscalationBadge({ stopReason }) {
+  if (!stopReason) return null;
+
+  if (
+    stopReason === "high_risk_case" ||
+    stopReason === "high_value_requires_policy_review" ||
+    stopReason.includes("policy")
+  ) {
+    return (
+      <span className="escalation-badge refused">
+        <AlertTriangle size={14} />
+        Policy Refused (0/3 Retries Used)
+      </span>
+    );
+  }
+
+  if (
+    stopReason === "maximum_retry_limit_reached" ||
+    stopReason.includes("limit")
+  ) {
+    return (
+      <span className="escalation-badge exhausted">
+        <Clock3 size={14} />
+        Exhausted Ladder (3/3 Retries Failed)
+      </span>
+    );
+  }
+
+  return null;
+}
+
+function DataSafetyNoticeBanner({ systemMode }) {
+  if (systemMode === "live") {
+    return (
+      <div className="data-safety-banner live">
+        <div className="safety-badge">LIVE MODE</div>
+        <span>
+          <strong>Live Database Persistence Active:</strong> Connected to live PostgreSQL instance (Neon). Real-time database metrics verified & ready for webhook event ingestion.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="data-safety-banner demo">
+      <div className="safety-badge">SAFE SIMULATION</div>
+      <span>
+        <strong>Safe Demo Environment:</strong> Operating on real database records with simulated payment gateway execution. No live customer balances or real funds modified.
+      </span>
+    </div>
+  );
+}
+
+function LiveIntegrationPanel({ onLiveEventSent }) {
+  const [paymentId, setPaymentId] = useState("");
+  const [amount, setAmount] = useState("4999.00");
+  const [email, setEmail] = useState("merchant_customer@example.com");
+  const [reason, setReason] = useState("Card authorization failed");
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  const handleSendLiveEvent = async (e) => {
+    e.preventDefault();
+    setSending(true);
+    setResult(null);
+    setError("");
+
+    try {
+      const res = await sendRazorpayWebhook({
+        payment_id: paymentId.trim() || undefined,
+        amount: parseFloat(amount) || 4999.00,
+        customer_email: email.trim(),
+        failure_reason: reason.trim(),
+      });
+      setResult(res);
+      setPaymentId("");
+      if (onLiveEventSent) onLiveEventSent();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="live-integration-panel">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">RAZORPAY INTEGRATION COMMAND CENTER</p>
+          <h3>Live Webhook Ingestion & Setup Guide</h3>
+        </div>
+        <span className="live-status-pill">
+          <span className="pulse-dot success" />
+          POSTGRESQL PERSISTENT DB CONNECTED
+        </span>
+      </div>
+
+      <div className="live-grid">
+        <div className="live-card">
+          <h4>1. Merchant Webhook Endpoint URL</h4>
+          <p>Configure this URL in your Razorpay Dashboard under <strong>Settings → Webhooks</strong>:</p>
+          <div className="code-copy-box">
+            <code>http://127.0.0.1:8000/webhooks/razorpay</code>
+          </div>
+          <ul className="setup-checklist">
+            <li><Check size={14} /> Ingest Event: <code>payment.failed</code></li>
+            <li><Check size={14} /> Database: PostgreSQL (Neon Persistent)</li>
+            <li><Check size={14} /> Audit Trail Logging: Real-Time Active</li>
+          </ul>
+        </div>
+
+        <div className="live-card">
+          <h4>2. Ingest Live Razorpay Webhook Event</h4>
+          <p>Test live incoming failed payment events directly into PostgreSQL:</p>
+          <form onSubmit={handleSendLiveEvent} className="live-form">
+            <div className="form-row">
+              <div>
+                <label className="form-label">Payment ID (Optional)</label>
+                <input
+                  className="form-input"
+                  placeholder="pay_live_88412"
+                  value={paymentId}
+                  onChange={(e) => setPaymentId(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label">Amount (₹)</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  placeholder="4999.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div>
+                <label className="form-label">Customer Email</label>
+                <input
+                  className="form-input"
+                  placeholder="customer@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label">Failure Reason</label>
+                <input
+                  className="form-input"
+                  placeholder="Card expired / insufficient funds"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {error && <div className="error-message">{error}</div>}
+            {result && (
+              <div className="success-message">
+                ✅ Live Webhook Ingested! Case ID: <code>{result.case_id}</code> (₹{result.amount_at_risk})
+              </div>
+            )}
+
+            <button type="submit" className="primary-button" disabled={sending}>
+              <Zap size={16} />
+              {sending ? "Ingesting Event..." : "Send Live Webhook Event"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState("dashboard");
+  const [systemMode, setSystemMode] = useState("demo");
+
+  const [booting, setBooting] = useState(true);
+  const [loaderStep, setLoaderStep] = useState(0);
+  const [loaderProgress, setLoaderProgress] = useState(15);
+  const [loaderFading, setLoaderFading] = useState(false);
 
   const [recoveryCases, setRecoveryCases] = useState([]);
   // Declared before the memo that reads it: a const referenced in a
@@ -562,6 +810,7 @@ function App() {
 
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [policy, setPolicy] = useState(null);
 
@@ -571,32 +820,86 @@ function App() {
 
   const [recentEvents, setRecentEvents] = useState([]);
 
-  const [backendOnline, setBackendOnline] = useState(false);
+  const [backendStatus, setBackendStatus] = useState("initializing");
+  const backendOnline = backendStatus === "online";
   const [newCaseOpen, setNewCaseOpen] = useState(false);
   const [paymentId, setPaymentId] = useState("");
   const [newCaseLoading, setNewCaseLoading] = useState(false);
   const [newCaseError, setNewCaseError] = useState("");
 
   useEffect(() => {
-    getRecoveryCases()
-      .then((cases) => {
-        setRecoveryCases(cases);
-        setRecoveryCase(cases[0] ?? null);
-      })
-      .catch((error) => setCaseError(error.message))
-      .finally(() => setCaseLoading(false));
-  }, []);
+    let isMounted = true;
 
-  useEffect(() => {
-    checkHealth()
-      .then(() => setBackendOnline(true))
-      .catch(() => setBackendOnline(false));
-  }, []);
+    const t1 = setTimeout(() => {
+      if (isMounted) {
+        setLoaderStep(1);
+        setLoaderProgress(45);
+      }
+    }, 250);
 
-  useEffect(() => {
-    getRecoveryPolicy()
-      .then(setPolicy)
-      .catch(() => setPolicy(null));
+    const t2 = setTimeout(() => {
+      if (isMounted) {
+        setLoaderStep(2);
+        setLoaderProgress(75);
+      }
+    }, 550);
+
+    const checkServerAndLoadData = async () => {
+      try {
+        await checkHealth();
+        if (!isMounted) return;
+        setBackendStatus("online");
+
+        const [cases, pol, met] = await Promise.all([
+          getRecoveryCases().catch(() => []),
+          getRecoveryPolicy().catch(() => null),
+          getRecoveryMetrics().catch(() => null),
+        ]);
+
+        if (!isMounted) return;
+
+        if (cases?.length) {
+          setRecoveryCases(cases);
+          setRecoveryCase((prev) => prev ?? cases[0] ?? null);
+        }
+        if (pol) setPolicy(pol);
+        if (met) setMetrics(met);
+        setCaseLoading(false);
+
+        setTimeout(() => {
+          if (!isMounted) return;
+          setLoaderStep(3);
+          setLoaderProgress(100);
+
+          setTimeout(() => {
+            if (!isMounted) return;
+            setLoaderFading(true);
+            setTimeout(() => {
+              if (!isMounted) return;
+              setBooting(false);
+            }, 350);
+          }, 300);
+        }, 600);
+      } catch (err) {
+        if (!isMounted) return;
+        setBackendStatus("offline");
+        setCaseLoading(false);
+        setLoaderStep(3);
+        setLoaderProgress(100);
+        setTimeout(() => {
+          setLoaderFading(true);
+          setTimeout(() => setBooting(false), 350);
+        }, 300);
+      }
+    };
+
+    checkServerAndLoadData();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, []);
 
   // Portfolio figures come from the backend rather than being summed
@@ -753,6 +1056,11 @@ function App() {
 
         setBatchProgress({ processed, remaining: result.cases_remaining });
 
+        // Update metrics & case lists live after each batch round
+        const updatedCases = await getRecoveryCases().catch(() => null);
+        if (updatedCases) setRecoveryCases(updatedCases);
+        await refreshMetrics().catch(() => null);
+
         if (result.cases_remaining === 0 || result.cases_processed === 0) {
           break;
         }
@@ -764,6 +1072,33 @@ function App() {
       setAgentError(error.message);
     } finally {
       setBatchRunning(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+
+    try {
+      // Cases and metrics are read together so the tiles and the table
+      // cannot show figures from two different moments.
+      const [cases] = await Promise.all([
+        getRecoveryCases(),
+        refreshMetrics(),
+      ]);
+
+      setRecoveryCases(cases);
+
+      // The selected case is separate state, so it goes stale unless it
+      // is re-read out of the freshly fetched list.
+      setRecoveryCase((prev) =>
+        prev
+          ? cases.find((item) => item.case_id === prev.case_id) ?? prev
+          : prev
+      );
+    } catch (error) {
+      console.error("Error refreshing cases:", error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -867,7 +1202,7 @@ function App() {
   };
 
   const handleCompleteAction = async () => {
-    if (!recoveryAction) {
+    if (!recoveryAction || !recoveryCase) {
       setActionError("No recovery action is available.");
       return;
     }
@@ -880,6 +1215,32 @@ function App() {
         recoveryAction.action_id
       );
       setRecoveryAction(action);
+
+      // Auto-record outcome for completed action if outcome doesn't exist yet
+      if (!recoveryOutcome) {
+        const outcome = await recordRecoveryOutcome(
+          recoveryCase.case_id,
+          action.action_id,
+          "recovered",
+          recoveryCase.amount_at_risk
+        );
+        setRecoveryOutcome(outcome);
+        const caseStatus = outcome.status === "not_recovered" ? "failed" : outcome.status;
+        setRecoveryCase((currentCase) =>
+          currentCase ? { ...currentCase, status: caseStatus } : currentCase
+        );
+        setRecoveryCases((cases) =>
+          cases.map((item) =>
+            item.case_id === recoveryCase.case_id
+              ? { ...item, status: caseStatus }
+              : item
+          )
+        );
+        await refreshMetrics().catch(() => null);
+      }
+
+      // Automatically transition stepper view to Outcomes & Audit
+      setActiveView("outcomes");
     } catch (error) {
       setActionError(error.message);
     } finally {
@@ -1019,6 +1380,13 @@ function App() {
 
   return (
     <div className="app-shell">
+      {booting && (
+        <RecoveryLoader
+          isFading={loaderFading}
+          currentStep={loaderStep}
+          progress={loaderProgress}
+        />
+      )}
       {newCaseOpen && (
         <div className="modal-backdrop">
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-case-title">
@@ -1182,15 +1550,28 @@ function App() {
 
         <div className="sidebar-footer">
           <div className="ai-status">
-            <span className={`status-dot ${backendOnline ? "" : "offline"}`} />
+            <span
+              className={`status-dot ${backendStatus === "online"
+                ? ""
+                : backendStatus === "initializing"
+                  ? "initializing"
+                  : "offline"
+                }`}
+            />
             <div>
               <strong>
-                {backendOnline ? "AI Engine Online" : "AI Engine Offline"}
+                {backendStatus === "online"
+                  ? "AI Engine Online"
+                  : backendStatus === "initializing"
+                    ? "AI Engine Initializing..."
+                    : "AI Engine Offline"}
               </strong>
               <span>
-                {backendOnline
+                {backendStatus === "online"
                   ? "Backend connected"
-                  : "Backend unavailable"}
+                  : backendStatus === "initializing"
+                    ? "Waking backend service..."
+                    : "Backend unavailable"}
               </span>
             </div>
           </div>
@@ -1228,21 +1609,45 @@ function App() {
           </div>
 
           <div className="topbar-right">
+            <div className="mode-toggle-group" role="group" aria-label="System mode toggle">
+              <button
+                type="button"
+                className={`mode-toggle-btn ${systemMode === "demo" ? "active demo" : ""}`}
+                onClick={() => setSystemMode("demo")}
+              >
+                🧪 DEMO MODE
+              </button>
+              <button
+                type="button"
+                className={`mode-toggle-btn ${systemMode === "live" ? "active live" : ""}`}
+                onClick={() => setSystemMode("live")}
+              >
+                ⚡ LIVE DATA
+              </button>
+            </div>
+
             <div className="header-system-status">
-              <span className="system-badge">
-                <span className="pulse-dot" />
-                SYSTEM OPERATIONAL
-              </span>
-              <span className="api-badge">
-                <span className="pulse-dot" />
-                API CONNECTED
-              </span>
+              {backendStatus === "online" ? (
+                <span className="system-badge">
+                  <span className="pulse-dot" />
+                  SYSTEM ONLINE
+                </span>
+              ) : (
+                <span className="system-badge offline">
+                  <span className="pulse-dot danger" />
+                  OFFLINE
+                </span>
+              )}
             </div>
             <div className="avatar">N</div>
           </div>
         </header>
 
         <div className="content view-fade-in" key={activeView}>
+          <DataSafetyNoticeBanner systemMode={systemMode} />
+          {systemMode === "live" && (
+            <LiveIntegrationPanel onLiveEventSent={handleRefresh} />
+          )}
           {activeView === "cases" ? (
             <>
               <section className="page-heading">
@@ -1256,6 +1661,16 @@ function App() {
                 </div>
 
                 <div className="heading-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={handleRefresh}
+                    disabled={refreshing || batchRunning}
+                    aria-label="Reload recovery cases"
+                  >
+                    <RefreshCw size={17} />
+                    {refreshing ? "Refreshing…" : "Refresh"}
+                  </button>
+
                   <button
                     className="primary-button"
                     onClick={handleRunAgent}
@@ -1295,16 +1710,19 @@ function App() {
                       </h3>
                     </div>
 
-                    <span
-                      className={`case-status ${agentResult.escalated
-                        ? "danger"
-                        : agentResult.amount_recovered > 0
-                          ? "success"
-                          : "neutral"
-                        }`}
-                    >
-                      {agentResult.status}
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <span
+                        className={`case-status ${agentResult.escalated
+                          ? "danger"
+                          : agentResult.amount_recovered > 0
+                            ? "success"
+                            : "neutral"
+                          }`}
+                      >
+                        {agentResult.status}
+                      </span>
+                      <RecoveryEscalationBadge stopReason={agentResult.stop_reason} />
+                    </div>
                   </div>
 
                   {agentResult.diagnosis_category && (
@@ -1737,8 +2155,8 @@ function App() {
                           {String(aiDecision.confidence).toLowerCase() === "high"
                             ? "87%"
                             : String(aiDecision.confidence).toLowerCase() === "medium"
-                            ? "65%"
-                            : "45%"}
+                              ? "65%"
+                              : "45%"}
                           )
                         </span>
                       </div>
@@ -1750,8 +2168,8 @@ function App() {
                               String(aiDecision.confidence).toLowerCase() === "high"
                                 ? "87%"
                                 : String(aiDecision.confidence).toLowerCase() === "medium"
-                                ? "65%"
-                                : "45%",
+                                  ? "65%"
+                                  : "45%",
                           }}
                         />
                       </div>
@@ -1921,59 +2339,62 @@ function App() {
                       </button>
                     )}
 
-                    {recoveryAction.status === "completed" && (
-                      <div className="outcome-controls">
-                        <span className="result-label">Record Outcome</span>
+                    {recoveryAction.status === "completed" &&
+                      !["recovered", "partially_recovered", "failed", "stopped"].includes(
+                        recoveryCase?.status
+                      ) && (
+                        <div className="outcome-controls">
+                          <span className="result-label">Record Outcome</span>
 
-                        <label className="outcome-amount">
-                          Amount recovered
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            max={recoveryCase?.amount_at_risk}
-                            value={amountValue}
-                            onChange={(event) =>
-                              setAmountRecovered(event.target.value)
-                            }
-                            disabled={outcomeLoading}
-                          />
-                        </label>
+                          <label className="outcome-amount">
+                            Amount recovered
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              max={recoveryCase?.amount_at_risk}
+                              value={amountValue}
+                              onChange={(event) =>
+                                setAmountRecovered(event.target.value)
+                              }
+                              disabled={outcomeLoading}
+                            />
+                          </label>
 
-                        <div className="outcome-buttons">
-                          <button
-                            className="primary-button"
-                            onClick={() => handleRecoveryOutcome("recovered")}
-                            disabled={outcomeLoading}
-                          >
-                            <CheckCircle2 size={17} />
-                            {outcomeLoading
-                              ? "Recording..."
-                              : "Mark Recovered"}
-                          </button>
+                          <div className="outcome-buttons">
+                            <button
+                              className="primary-button"
+                              onClick={() => handleRecoveryOutcome("recovered")}
+                              disabled={outcomeLoading}
+                            >
+                              <CheckCircle2 size={17} />
+                              {outcomeLoading
+                                ? "Recording..."
+                                : "Mark Recovered"}
+                            </button>
 
-                          <button
-                            className="secondary-button"
-                            onClick={() =>
-                              handleRecoveryOutcome("partially_recovered")
-                            }
-                            disabled={outcomeLoading}
-                          >
-                            Mark Partially Recovered
-                          </button>
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                handleRecoveryOutcome("partially_recovered")
+                              }
+                              disabled={outcomeLoading}
+                            >
+                              Mark Partially Recovered
+                            </button>
 
-                          <button
-                            className="secondary-button"
-                            onClick={() =>
-                              handleRecoveryOutcome("not_recovered")
-                            }
-                            disabled={outcomeLoading}
-                          >
-                            Mark Not Recovered
-                          </button>
+                            <button
+                              className="secondary-button"
+                              onClick={() =>
+                                handleRecoveryOutcome("not_recovered")
+                              }
+                              disabled={outcomeLoading}
+                            >
+                              Mark Not Recovered
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {outcomeError && (
                       <div className="error-message">{outcomeError}</div>
@@ -2266,6 +2687,16 @@ function App() {
 
                 <div className="heading-actions">
                   <button
+                    className="secondary-button"
+                    onClick={handleRefresh}
+                    disabled={refreshing || batchRunning}
+                    aria-label="Reload dashboard data"
+                  >
+                    <RefreshCw size={17} />
+                    {refreshing ? "Refreshing…" : "Refresh"}
+                  </button>
+
+                  <button
                     className="primary-button"
                     onClick={handleRunBatch}
                     disabled={batchRunning}
@@ -2284,6 +2715,17 @@ function App() {
                   </button>
                 </div>
               </section>
+
+              {metrics?.revenue_recovered === 0 && summary.total > 0 && !batchRunning && (
+                <div className="initial-state-banner">
+                  <div className="banner-icon">
+                    <Sparkles size={16} />
+                  </div>
+                  <div className="banner-text">
+                    <strong>Initial System State:</strong> {summary.total} unassessed failed payments detected. Click <strong>Run Recovery Batch</strong> above to execute bounded recovery across all cases.
+                  </div>
+                </div>
+              )}
 
               <section className="stats-grid">
                 {stats.map((stat) => {

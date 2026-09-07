@@ -34,32 +34,45 @@ class RecoveryOutcomeRepository:
         return [self._to_domain(model) for model in models]
 
     def get_recovered_totals(self) -> dict[str, Decimal]:
-        # Summed per case in one query. A case can hold more than one
-        # outcome, and a partial recovery brings back less than the amount
-        # at risk, so the recovered figure has to come from the outcomes
-        # rather than from the case's own amount.
-        totals = (
-            self.db.query(
+        # The latest outcome per case, not the sum of every outcome row.
+        # A case has one authoritative result; summing the rows counts a
+        # case twice when its outcome was recorded more than once, and can
+        # report more money recovered than was ever at risk.
+        latest = (
+            self.db.query(RecoveryOutcomeModel)
+            .distinct(RecoveryOutcomeModel.case_id)
+            .order_by(
                 RecoveryOutcomeModel.case_id,
-                func.sum(RecoveryOutcomeModel.amount_recovered),
+                RecoveryOutcomeModel.recorded_at.desc(),
             )
-            .group_by(RecoveryOutcomeModel.case_id)
             .all()
         )
 
-        return {case_id: total for case_id, total in totals}
+        return {
+            model.case_id: model.amount_recovered
+            for model in latest
+            if model.status in ("recovered", "partially_recovered")
+        }
 
     def count_by_status(self) -> dict[str, int]:
-        rows = (
-            self.db.query(
-                RecoveryOutcomeModel.status,
-                func.count(RecoveryOutcomeModel.outcome_id),
+        # Counts cases by their latest outcome, not outcome rows, so this
+        # is comparable with the case counts instead of contradicting them.
+        latest = (
+            self.db.query(RecoveryOutcomeModel)
+            .distinct(RecoveryOutcomeModel.case_id)
+            .order_by(
+                RecoveryOutcomeModel.case_id,
+                RecoveryOutcomeModel.recorded_at.desc(),
             )
-            .group_by(RecoveryOutcomeModel.status)
             .all()
         )
 
-        return {status: count for status, count in rows}
+        counts: dict[str, int] = {}
+
+        for model in latest:
+            counts[model.status] = counts.get(model.status, 0) + 1
+
+        return counts
 
     def save(self, outcome: RecoveryOutcome) -> RecoveryOutcome:
         model = RecoveryOutcomeModel(

@@ -9,6 +9,7 @@ from app.api.recovery_outcomes import router as recovery_outcomes_router
 from app.api.audit_events import router as audit_events_router
 from app.api.risk_assessments import router as risk_assessments_router
 from app.api.recovery_orchestrator import router as recovery_orchestrator_router
+from app.api.webhooks import router as webhooks_router
 
 app = FastAPI(
     title="RecoverAI",
@@ -56,6 +57,7 @@ app.include_router(recovery_outcomes_router)
 app.include_router(audit_events_router)
 app.include_router(risk_assessments_router)
 app.include_router(recovery_orchestrator_router)
+app.include_router(webhooks_router)
 
 
 @app.get("/health")
